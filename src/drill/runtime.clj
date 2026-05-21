@@ -12,7 +12,7 @@
                      :value value
                      :error (me/humanize (m/explain schema value))}))))
 
-(defn- dispatch [{:keys [id cases]} tag args]
+(defn dispatch [{:keys [id cases]} tag args]
   (let [case-spec (get cases tag)]
     (when-not case-spec
       (throw (ex-info (str "unknown-case: " id "/" tag)
