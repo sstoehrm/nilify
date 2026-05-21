@@ -68,7 +68,7 @@
 
 (defn regen-stale []
   (vec (for [item (list)
-             :when (= :stale (:status item))]
+             :when (contains? #{:stale :missing} (:status item))]
          (regen (:id item)))))
 
 (defn regen-all []
