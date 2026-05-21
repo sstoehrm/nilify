@@ -62,9 +62,10 @@
 (defn regen [id]
   (when-let [the-spec (reg/lookup-spec id)]
     (swap! reg/state assoc :generate? true)
-    (let [result (generator/gen-feature! the-spec)]
-      (swap! reg/state assoc :generate? false)
-      result)))
+    (try
+      (generator/gen-feature! the-spec)
+      (finally
+        (swap! reg/state assoc :generate? false)))))
 
 (defn regen-stale []
   (vec (for [item (list)
@@ -94,16 +95,18 @@
 
       (contains? argset "--regen-all")
       (do (swap! reg/state assoc :generate? true)
-          (let [results (regen-all)]
-            (swap! reg/state assoc :generate? false)
-            (doseq [r results] (println r))))
+          (try
+            (doseq [r (regen-all)] (println r))
+            (finally
+              (swap! reg/state assoc :generate? false))))
 
       (or (contains? argset "--generate")
           (contains? argset "--regen-stale"))
       (do (swap! reg/state assoc :generate? true)
-          (let [results (regen-stale)]
-            (swap! reg/state assoc :generate? false)
-            (doseq [r results] (println r))))
+          (try
+            (doseq [r (regen-stale)] (println r))
+            (finally
+              (swap! reg/state assoc :generate? false))))
 
       :else
       (when-let [f (:main-fn @reg/state)]

@@ -84,3 +84,17 @@
 (deftest main-with-no-main-and-no-flag-is-a-no-op
   ;; should not throw, should not exit
   (is (nil? (drill/main))))
+
+(deftest diff-handles-missing-generated-file
+  (drill/feature feature-spec)
+  ;; no file written — diff should return :old-hash nil, :would-regen? true
+  (let [result (drill/diff :compute)]
+    (is (nil? (:old-hash result)))
+    (is (true? (:would-regen? result)))))
+
+(deftest regen-restores-generate-flag-on-failure
+  (binding [gen/*llm-call* (fn [_] (throw (ex-info "boom" {:type :test})))]
+    (drill/feature feature-spec)
+    (is (thrown? clojure.lang.ExceptionInfo (drill/regen :compute)))
+    (is (false? (:generate? @reg/state))
+        "generate? should be restored to false after generator throws")))

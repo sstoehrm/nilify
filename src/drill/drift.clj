@@ -16,8 +16,9 @@
   (-> spec canonicalize pr-str sha256-hex (subs 0 16)))
 
 (defn header-hash [^String file-content]
-  (some->> (re-find #";; spec-hash: ([0-9a-f]+)" file-content)
-           second))
+  (when file-content
+    (some->> (re-find #";; spec-hash: ([0-9a-f]+)" file-content)
+             second)))
 
 (defn status [spec file-content]
   (cond

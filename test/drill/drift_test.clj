@@ -18,6 +18,9 @@
 (deftest header-hash-nil-when-missing
   (is (nil? (drift/header-hash "(ns plain)"))))
 
+(deftest header-hash-nil-when-input-nil
+  (is (nil? (drift/header-hash nil))))
+
 (deftest status-missing-when-no-file
   (is (= :missing (drift/status spec-a nil))))
 
