@@ -82,3 +82,29 @@
         new-hash (drift/spec-hash the-spec)
         old-hash (drift/header-hash existing)]
     {:id id :old-hash old-hash :new-hash new-hash :would-regen? (not= old-hash new-hash)}))
+
+(defn main [& args]
+  (let [argset (set args)]
+    (cond
+      (contains? argset "--list")
+      (doseq [i (list)] (println i))
+
+      (contains? argset "--check")
+      (check)
+
+      (contains? argset "--regen-all")
+      (do (swap! reg/state assoc :generate? true)
+          (let [results (regen-all)]
+            (swap! reg/state assoc :generate? false)
+            (doseq [r results] (println r))))
+
+      (or (contains? argset "--generate")
+          (contains? argset "--regen-stale"))
+      (do (swap! reg/state assoc :generate? true)
+          (let [results (regen-stale)]
+            (swap! reg/state assoc :generate? false)
+            (doseq [r results] (println r))))
+
+      :else
+      (when-let [f (:main-fn @reg/state)]
+        (apply f args)))))

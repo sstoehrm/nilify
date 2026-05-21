@@ -74,3 +74,13 @@
             compute (first (filter #(= :compute (:id %)) items))]
         (is (= :fresh (:status compute))))
       (doseq [f (.listFiles (clojure.java.io/file tmp))] (.delete f)))))
+
+(deftest main-with-no-args-calls-registered-main-fn
+  (let [called (atom nil)]
+    (drill/reg-main (fn [& args] (reset! called args)))
+    (drill/main "userarg1" "userarg2")
+    (is (= '("userarg1" "userarg2") @called))))
+
+(deftest main-with-no-main-and-no-flag-is-a-no-op
+  ;; should not throw, should not exit
+  (is (nil? (drill/main))))
