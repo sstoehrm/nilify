@@ -50,3 +50,27 @@
 (deftest feature-rejects-invalid-spec
   (is (thrown-with-msg? clojure.lang.ExceptionInfo #"invalid-spec"
         (drill/feature (dissoc feature-spec :id)))))
+
+(deftest list-returns-status-per-spec
+  (drill/feature feature-spec)
+  (drill/produce produce-spec)
+  (let [items (drill/list)
+        by-id (into {} (map (juxt :id identity) items))]
+    (is (= :missing (-> by-id :compute :status)))
+    (is (= :n/a     (-> by-id :translate :status)))
+    (is (= :feature (-> by-id :compute :kind)))
+    (is (= :produce (-> by-id :translate :kind)))))
+
+(deftest regen-calls-generator-and-marks-fresh
+  (let [tmp "test/tmp/drill_generated_core"]
+    (.mkdirs (clojure.java.io/file tmp))
+    (binding [gen/*generated-dir* tmp
+              gen/*llm-call*
+              (constantly
+               "```clojure\n(ns drill-generated.compute (:require [drill.registry :as r])) (defn -impl [_] 0.0) (r/register-impl! :compute -impl)\n```")]
+      (drill/feature feature-spec)
+      (drill/regen :compute)
+      (let [items   (drill/list)
+            compute (first (filter #(= :compute (:id %)) items))]
+        (is (= :fresh (:status compute))))
+      (doseq [f (.listFiles (clojure.java.io/file tmp))] (.delete f)))))
