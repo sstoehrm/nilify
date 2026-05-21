@@ -25,6 +25,13 @@
        "(r/register-impl! :greet -impl)\n"
        "```\n"))
 
+(def llm-response-two-words
+  (str "```clojure\n"
+       "(ns drill-generated.two-words (:require [drill.registry :as r]))\n"
+       "(defn -impl [[_tag name]] (str \"hi \" name))\n"
+       "(r/register-impl! :two-words -impl)\n"
+       "```\n"))
+
 (deftest extract-block-strips-fences
   (is (str/includes? (#'gen/extract-block llm-response) "(defn -impl")))
 
@@ -47,6 +54,46 @@
       (is (= (str tmp-dir "/greet.clj") (:path result))))))
 
 (deftest gen-feature-translates-hyphens-in-id
-  (binding [gen/*llm-call* (constantly llm-response)]
+  (binding [gen/*llm-call* (constantly llm-response-two-words)]
     (let [result (gen/gen-feature! (assoc spec :id :two-words))]
       (is (= (str tmp-dir "/two_words.clj") (:path result))))))
+
+(def spec-with-examples
+  {:id :greet
+   :cases {:hi {:input    [:tuple [:= :hi] :string]
+                :output   :string
+                :examples [{:in [:hi "Sam"] :out "hi Sam"}]}}})
+
+(def greet-good
+  (str "```clojure\n"
+       "(ns drill-generated.greet (:require [drill.registry :as r]))\n"
+       "(defn -impl [[_tag name]] (str \"hi \" name))\n"
+       "(r/register-impl! :greet -impl)\n"
+       "```\n"))
+
+(def greet-no-register
+  (str "```clojure\n"
+       "(ns drill-generated.greet)\n"
+       "(defn -impl [[_tag name]] (str \"hi \" name))\n"
+       "```\n"))
+
+(def greet-wrong-output
+  (str "```clojure\n"
+       "(ns drill-generated.greet (:require [drill.registry :as r]))\n"
+       "(defn -impl [[_tag _]] \"goodbye\")\n"
+       "(r/register-impl! :greet -impl)\n"
+       "```\n"))
+
+(deftest smoke-passes-when-impl-honors-examples
+  (binding [gen/*llm-call* (constantly greet-good)]
+    (is (= :generated (:status (gen/gen-feature! spec-with-examples))))))
+
+(deftest smoke-throws-when-impl-not-registered
+  (binding [gen/*llm-call* (constantly greet-no-register)]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"generated-impl-broken"
+          (gen/gen-feature! spec-with-examples)))))
+
+(deftest smoke-throws-when-example-mismatch
+  (binding [gen/*llm-call* (constantly greet-wrong-output)]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"generated-impl-broken"
+          (gen/gen-feature! spec-with-examples)))))

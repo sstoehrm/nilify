@@ -35,6 +35,30 @@
 (defn- id->path [id]
   (str *generated-dir* "/" (id->filename id) ".clj"))
 
+(defn- smoke! [spec path]
+  (try
+    (load-file path)
+    (catch Exception e
+      (throw (ex-info (str "generated-impl-broken: load failed for " (:id spec))
+                      {:type :drill/generated-impl-broken :id (:id spec) :path path}
+                      e))))
+  (let [impl (reg/lookup (:id spec))]
+    (when-not impl
+      (throw (ex-info (str "generated-impl-broken: :id " (:id spec)
+                           " not registered after load")
+                      {:type :drill/generated-impl-broken :id (:id spec) :path path})))
+    (doseq [[_tag case-spec] (:cases spec)
+            {tag-and-args :in expected :out} (:examples case-spec)]
+      (let [actual (impl tag-and-args)]
+        (when (not= expected actual)
+          (throw (ex-info (str "generated-impl-broken: example mismatch for "
+                               (:id spec))
+                          {:type :drill/generated-impl-broken
+                           :id (:id spec)
+                           :example-in tag-and-args
+                           :expected expected
+                           :actual actual})))))))
+
 (defn gen-feature! [spec]
   (let [siblings    (->> (vals @reg/descriptions)
                          (remove #(= (:id %) (:id spec))))
@@ -46,4 +70,5 @@
         path        (id->path (:id spec))]
     (io/make-parents path)
     (spit path content)
+    (smoke! spec path)
     {:id (:id spec) :status :generated :path path}))
