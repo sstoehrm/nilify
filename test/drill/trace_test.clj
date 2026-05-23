@@ -1,5 +1,5 @@
 (ns drill.trace-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
             [drill.trace :as trace]))
 

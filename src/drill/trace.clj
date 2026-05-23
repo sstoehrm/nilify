@@ -10,7 +10,7 @@
 
 (defn- format-summary [{:keys [stage id tag prompt-length elapsed-ms
                                 response-length block-length path
-                                spec-hash example-count]}]
+                                example-count]}]
   (case stage
     :prompt-built
     (str "prompt-built " id " (" prompt-length " chars)")
@@ -55,6 +55,6 @@
     (let [summary (format-summary event)]
       (binding [*out* *err*]
         (println (str "[drill/" (name level) "] " summary))
-        (when (= *level* :debug)
+        (when (= level :debug)
           (println (str "  " (with-out-str (pp/pprint event)))))
         (flush)))))
