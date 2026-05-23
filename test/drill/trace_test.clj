@@ -53,6 +53,7 @@
     (let [cases [{:stage :prompt-built :id :x :prompt-length 500}
                  {:stage :llm-call-start :id :x}
                  {:stage :llm-call-done :id :x :elapsed-ms 1234 :response-length 800}
+                 {:stage :block-extracted :id :x :block-length 420}
                  {:stage :file-written :id :x :path "drill_generated/x.clj" :spec-hash "abc"}
                  {:stage :smoke-pass :id :x :example-count 3}
                  {:stage :produce-prompt-built :id :x :tag :translate :prompt-length 200}
