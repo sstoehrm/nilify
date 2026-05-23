@@ -10,6 +10,7 @@
     drill.generator-test
     drill.produce-test
     drill.core-test
+    drill.trace-test
     end-to-end-test])
 
 (defn -main [& _]
