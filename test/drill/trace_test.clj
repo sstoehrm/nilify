@@ -3,7 +3,8 @@
             [clojure.string :as str]
             [drill.trace :as trace]
             [drill.generator :as gen]
-            [drill.registry :as reg]))
+            [drill.registry :as reg]
+            [drill.produce :as produce]))
 
 (defn- capture-stderr [f]
   (let [sw (java.io.StringWriter.)]
@@ -101,3 +102,19 @@
           (is (str/includes? out "file-written"))
           (is (str/includes? out "smoke-pass"))
           (reg/clear!))))))
+
+(deftest produce-call-emits-trace-events
+  (testing "produce/call emits expected trace events at :info level"
+    (let [spec {:id :translate
+                :kind :produce
+                :desc "Translate"
+                :cases {:translate {:input [:tuple [:= :translate] :string]
+                                    :output :string
+                                    :examples [{:in [:translate "hi"] :out "hello"}]}}}]
+      (binding [trace/*level* :info
+                gen/*llm-call* (fn [_] "\"hola\"")]
+        (let [out (capture-stderr
+                   #(do (produce/call spec :translate ["hi"])))]
+          (is (str/includes? out "produce-prompt-built"))
+          (is (str/includes? out "produce-llm-call-start"))
+          (is (str/includes? out "produce-llm-call-done")))))))
