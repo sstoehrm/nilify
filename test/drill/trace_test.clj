@@ -4,7 +4,8 @@
             [drill.trace :as trace]
             [drill.generator :as gen]
             [drill.registry :as reg]
-            [drill.produce :as produce]))
+            [drill.produce :as produce]
+            [drill.runtime :as runtime]))
 
 (defn- capture-stderr [f]
   (let [sw (java.io.StringWriter.)]
@@ -118,3 +119,20 @@
           (is (str/includes? out "produce-prompt-built"))
           (is (str/includes? out "produce-llm-call-start"))
           (is (str/includes? out "produce-llm-call-done")))))))
+
+(deftest runtime-dispatch-emits-validation-events
+  (testing "runtime/dispatch emits validation events at :debug level"
+    (let [spec {:id :rt-test
+                :kind :feature
+                :lang :babashka
+                :cases {:eval {:input [:tuple [:= :eval] :string]
+                               :output :double}}}]
+      (reg/clear!)
+      (reg/register-spec! spec)
+      (reg/register-impl! :rt-test (fn [[_tag & args]] (Double/parseDouble (first args))))
+      (let [out (capture-stderr
+                 #(binding [trace/*level* :debug]
+                    (runtime/dispatch spec :eval ["3.14"])))]
+        (is (str/includes? out "input-validated"))
+        (is (str/includes? out "output-validated"))
+        (reg/clear!)))))

@@ -1,7 +1,8 @@
 (ns drill.runtime
   (:require [malli.core  :as m]
             [malli.error :as me]
-            [drill.registry :as reg]))
+            [drill.registry :as reg]
+            [drill.trace :as trace]))
 
 (defn- validate! [schema value error-type id tag]
   (when-not (m/validate schema value)
@@ -20,11 +21,13 @@
     (let [packed  (vec (cons tag args))
           impl-fn (reg/lookup id)]
       (validate! (:input case-spec) packed :drill/input-invalid id tag)
+      (trace/emit :debug {:stage :input-validated :id id :tag tag :input packed})
       (when-not impl-fn
         (throw (ex-info (str "impl-missing: " id)
                         {:type :drill/impl-missing :id id})))
       (let [result (impl-fn packed)]
         (validate! (:output case-spec) result :drill/output-invalid id tag)
+        (trace/emit :debug {:stage :output-validated :id id :tag tag :output result})
         result))))
 
 (defn make-callable [spec]
