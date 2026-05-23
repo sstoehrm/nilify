@@ -4,7 +4,8 @@
             [clojure.string   :as str]
             [drill.drift      :as drift]
             [drill.prompt     :as prompt]
-            [drill.registry   :as reg]))
+            [drill.registry   :as reg]
+            [drill.trace      :as trace]))
 
 (def ^:dynamic *generated-dir* "drill_generated")
 
@@ -62,13 +63,24 @@
 (defn gen-feature! [spec]
   (let [siblings    (->> (vals @reg/descriptions)
                          (remove #(= (:id %) (:id spec))))
-        prompt-text (prompt/build spec siblings)
-        response    (*llm-call* prompt-text)
-        body        (extract-block response)
-        h           (drift/spec-hash spec)
-        content     (str (header h) body)
-        path        (id->path (:id spec))]
-    (io/make-parents path)
-    (spit path content)
-    (smoke! spec path)
-    {:id (:id spec) :status :generated :path path}))
+        prompt-text (prompt/build spec siblings)]
+    (trace/emit :info {:stage :prompt-built :id (:id spec) :prompt-length (count prompt-text)})
+    (trace/emit :debug {:stage :prompt-built :id (:id spec) :prompt-length (count prompt-text) :prompt prompt-text})
+    (trace/emit :info {:stage :llm-call-start :id (:id spec)})
+    (let [start    (System/currentTimeMillis)
+          response (*llm-call* prompt-text)
+          elapsed  (- (System/currentTimeMillis) start)]
+      (trace/emit :info {:stage :llm-call-done :id (:id spec) :elapsed-ms elapsed :response-length (count response)})
+      (trace/emit :debug {:stage :llm-call-done :id (:id spec) :elapsed-ms elapsed :response-length (count response) :response response})
+      (let [body    (extract-block response)
+            _       (trace/emit :debug {:stage :block-extracted :id (:id spec) :block-length (count body)})
+            h       (drift/spec-hash spec)
+            content (str (header h) body)
+            path    (id->path (:id spec))]
+        (io/make-parents path)
+        (spit path content)
+        (trace/emit :info {:stage :file-written :id (:id spec) :path path :spec-hash h})
+        (smoke! spec path)
+        (let [example-count (->> (:cases spec) vals (mapcat :examples) count)]
+          (trace/emit :info {:stage :smoke-pass :id (:id spec) :example-count example-count}))
+        {:id (:id spec) :status :generated :path path}))))

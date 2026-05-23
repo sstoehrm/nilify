@@ -1,7 +1,9 @@
 (ns drill.trace-test
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.string :as str]
-            [drill.trace :as trace]))
+            [drill.trace :as trace]
+            [drill.generator :as gen]
+            [drill.registry :as reg]))
 
 (defn- capture-stderr [f]
   (let [sw (java.io.StringWriter.)]
@@ -68,3 +70,34 @@
                       (trace/emit :info evt)))]
           (is (str/includes? out (name (:stage evt)))
               (str "missing stage name in output for " (:stage evt))))))))
+
+(deftest gen-feature-emits-trace-events
+  (testing "gen-feature! emits expected trace events at :info level"
+    (let [events (atom [])
+          spec {:id :traced
+                :kind :feature
+                :lang :babashka
+                :desc "test"
+                :cases {:eval {:input [:tuple [:= :eval] :string]
+                               :output :double
+                               :examples [{:in [:eval "(+ 1 2)"] :out 3.0}]}}}]
+      (binding [trace/*level* :info
+                gen/*generated-dir* "test/tmp"
+                gen/*llm-call* (fn [_]
+                                 (str "```clojure\n"
+                                      "(ns drill-generated.traced\n"
+                                      "  (:require [drill.registry :as reg]))\n"
+                                      "(defn -impl [[tag & args]]\n"
+                                      "  (case tag :eval (Double/parseDouble (str (load-string (first args))))))\n"
+                                      "(reg/register-impl! :traced -impl)\n"
+                                      "```"))]
+        (let [out (capture-stderr
+                   #(do (reg/clear!)
+                        (reg/register-spec! spec)
+                        (gen/gen-feature! spec)))]
+          (is (str/includes? out "prompt-built"))
+          (is (str/includes? out "llm-call-start"))
+          (is (str/includes? out "llm-call-done"))
+          (is (str/includes? out "file-written"))
+          (is (str/includes? out "smoke-pass"))
+          (reg/clear!))))))
