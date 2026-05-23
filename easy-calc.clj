@@ -4,51 +4,68 @@
 (def ui
   (drill/feature
    {:id :ui
-    :lang :babshhka
-    :input [:or
-            [:enum :get+wait-query]
-            [:tuple [:enum :in-progress] :boolean]
-            [:tuple [:enum :set-result :confirm+wait-query] :string]]
-    :output [:or
-             [:tuple [:enum :get+wait-query] :string]
-             [:tuple [:enum :set-result :confirm+wait-query :in-progress] :boolean]]
-    :desc (drill/prompt "A TUI, using the build in babshhka tools."
-                        "It has multiple fields:"
-                        "- Input field for the user to input data. The result gets queried by :get+wait-query."
-                        "- Confirm dialog when :configm+wait-query is called with the parameter."
-                        "- ")}))
+    :lang :babashka
+    :desc (drill/prompt
+           "A TUI built with babashka's built-in tools."
+           "Manages a single input field, a confirm dialog, a busy"
+           "indicator, and a result display.")
+    :cases
+    {:get+wait-query
+     {:input  [:tuple [:= :get+wait-query]]
+      :output :string
+      :desc   "Block until the user submits a query; return what they typed."}
 
-(def process
+     :confirm+wait-query
+     {:input  [:tuple [:= :confirm+wait-query] :string]
+      :output :boolean
+      :desc   "Show the value to the user; return their yes/no."}
+
+     :set-result
+     {:input  [:tuple [:= :set-result] :string]
+      :output :boolean
+      :desc   "Display the computed result; ack with true on success."}
+
+     :in-progress
+     {:input  [:tuple [:= :in-progress] :boolean]
+      :output :boolean
+      :desc   "Toggle the busy indicator; ack with true."}}}))
+
+(def translate
   (drill/produce
-   {:id :produce
-    ;; :input :string ;; omitted defaults
-    ;; :output :string ;; ommited defaults
-    :desc "Translate the natural language query into a clojure computable form."}))
+   {:id :translate-query
+    :desc "Translate natural-language queries into Clojure-computable forms."
+    :cases
+    {:translate
+     {:input  [:tuple [:= :translate] :string]
+      :output :string
+      :examples [{:in [:translate "what is two plus two"] :out "(+ 2 2)"}]}}}))
 
 (def compute
   (drill/feature
    {:id :compute
     :lang :babashka
-    ;;:input :string
-    :output :double
-    :desc "Use babashka sci to compute the provided string in a sandbox"}))
+    :desc "Evaluate a Clojure expression string in a babashka sci sandbox."
+    :cases
+    {:eval
+     {:input  [:tuple [:= :eval] :string]
+      :output :double
+      :examples [{:in [:eval "(+ 1 2)"] :out 3.0}
+                 {:in [:eval "(* 2.5 4)"] :out 10.0}]}}}))
 
-(def drill-main
-  (fn [& args]
-    (loop [exit?]
-      (if-not exit?
-        (let [[_ query] (ui :get+wait-query)
-              _ (ui :in-progress true)
-              calculation (process query)
-              _ (ui :in-progress false)
-              [_ confirmed?] (ui [:confirm+wait-query calculation])]
-          (if confirmed?
-            (do
-              (ui :in-progress true)
-              (ui [:set-result (compute calculation)])
-              (ui :in-progress false))
-            (recur false)))
-        (println "Bye")))))
+(defn run [& _]
+  (loop []
+    (let [query (ui :get+wait-query)]
+      (ui :in-progress true)
+      (let [expr (translate :translate query)]
+        (ui :in-progress false)
+        (if (ui :confirm+wait-query expr)
+          (do (ui :in-progress true)
+              (ui :set-result (str (compute :eval expr)))
+              (ui :in-progress false)
+              (recur))
+          (recur))))))
 
-(drill/reg-main drill-main)
+(drill/reg-main run)
 
+(when (= *file* (System/getProperty "babashka.file"))
+  (apply drill/main *command-line-args*))

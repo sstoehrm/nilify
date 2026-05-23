@@ -1,0 +1,7 @@
+{:paths ["src" "test"]
+ :deps  {metosin/malli {:mvn/version "0.16.4"}}
+ :tasks {test {:doc  "Run all drill tests"
+               :task (let [{:keys [out err exit]} (clojure.java.shell/sh "bb" "test/runner.clj")]
+                       (print out) (when (seq err) (binding [*out* *err*] (print err)))
+                       (flush)
+                       (System/exit exit))}}}
