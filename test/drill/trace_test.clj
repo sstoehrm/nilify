@@ -5,7 +5,8 @@
             [drill.generator :as gen]
             [drill.registry :as reg]
             [drill.produce :as produce]
-            [drill.runtime :as runtime]))
+            [drill.runtime :as runtime]
+            [drill.core :as drill]))
 
 (defn- capture-stderr [f]
   (let [sw (java.io.StringWriter.)]
@@ -136,3 +137,35 @@
         (is (str/includes? out "input-validated"))
         (is (str/includes? out "output-validated"))
         (reg/clear!)))))
+
+(deftest cli-verbose-flag-sets-info-level
+  (testing "--verbose sets *level* to :info during main"
+    (reg/clear!)
+    (reg/register-spec! {:id :cli-test :kind :feature :lang :babashka
+                         :cases {:x {:input [:tuple [:= :x]] :output :any}}})
+    (let [out (capture-stderr
+               #(binding [gen/*generated-dir* "test/tmp"
+                          gen/*llm-call* (fn [_]
+                                          (str "```clojure\n"
+                                               "(ns drill-generated.cli-test\n"
+                                               "  (:require [drill.registry :as reg]))\n"
+                                               "(defn -impl [x] nil)\n"
+                                               "(reg/register-impl! :cli-test -impl)\n"
+                                               "```"))]
+                  (drill/main "--list" "--verbose")))]
+      (is (= :off trace/*level*) "level restored after main returns"))
+    (reg/clear!)))
+
+(deftest cli-debug-flag-sets-debug-level
+  (testing "--debug sets *level* to :debug during main"
+    (reg/clear!)
+    (let [captured (atom nil)]
+      (reg/register-spec! {:id :cli-test2 :kind :feature :lang :babashka
+                           :cases {:x {:input [:tuple [:= :x]] :output :any}}})
+      (binding [gen/*generated-dir* "test/tmp"]
+        (with-redefs [drill/list (fn []
+                                   (reset! captured trace/*level*)
+                                   [])]
+          (drill/main "--list" "--debug")))
+      (is (= :debug @captured))
+      (reg/clear!))))

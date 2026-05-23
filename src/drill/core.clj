@@ -7,7 +7,8 @@
             [drill.runtime   :as runtime]
             [drill.produce   :as produce]
             [drill.drift     :as drift]
-            [drill.generator :as generator]))
+            [drill.generator :as generator]
+            [drill.trace     :as trace]))
 
 (defn prompt [& lines]
   (string/join "\n" lines))
@@ -85,29 +86,34 @@
     {:id id :old-hash old-hash :new-hash new-hash :would-regen? (not= old-hash new-hash)}))
 
 (defn main [& args]
-  (let [argset (set args)]
-    (cond
-      (contains? argset "--list")
-      (doseq [i (list)] (println i))
+  (let [argset (set args)
+        level  (cond
+                 (contains? argset "--debug")   :debug
+                 (contains? argset "--verbose") :info
+                 :else                          :off)]
+    (binding [trace/*level* level]
+      (cond
+        (contains? argset "--list")
+        (doseq [i (list)] (println i))
 
-      (contains? argset "--check")
-      (check)
+        (contains? argset "--check")
+        (check)
 
-      (contains? argset "--regen-all")
-      (do (swap! reg/state assoc :generate? true)
-          (try
-            (doseq [r (regen-all)] (println r))
-            (finally
-              (swap! reg/state assoc :generate? false))))
+        (contains? argset "--regen-all")
+        (do (swap! reg/state assoc :generate? true)
+            (try
+              (doseq [r (regen-all)] (println r))
+              (finally
+                (swap! reg/state assoc :generate? false))))
 
-      (or (contains? argset "--generate")
-          (contains? argset "--regen-stale"))
-      (do (swap! reg/state assoc :generate? true)
-          (try
-            (doseq [r (regen-stale)] (println r))
-            (finally
-              (swap! reg/state assoc :generate? false))))
+        (or (contains? argset "--generate")
+            (contains? argset "--regen-stale"))
+        (do (swap! reg/state assoc :generate? true)
+            (try
+              (doseq [r (regen-stale)] (println r))
+              (finally
+                (swap! reg/state assoc :generate? false))))
 
-      :else
-      (when-let [f (:main-fn @reg/state)]
-        (apply f args)))))
+        :else
+        (when-let [f (:main-fn @reg/state)]
+          (apply f args))))))
