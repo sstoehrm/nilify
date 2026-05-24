@@ -6,7 +6,8 @@
     nil.registry-test
     nil.runtime-test
     nil.verify-test
-    nil.core-test])
+    nil.core-test
+    nil.init-test])
 
 (defn -main [& _]
   (let [loaded (reduce (fn [acc ns-sym]
