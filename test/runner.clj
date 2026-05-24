@@ -4,7 +4,8 @@
 (def test-namespaces
   '[nil.spec-test
     nil.registry-test
-    nil.runtime-test])
+    nil.runtime-test
+    nil.verify-test])
 
 (defn -main [& _]
   (let [loaded (reduce (fn [acc ns-sym]
