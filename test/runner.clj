@@ -2,7 +2,8 @@
   (:require [clojure.test :as t]))
 
 (def test-namespaces
-  '[nil.spec-test])
+  '[nil.spec-test
+    nil.registry-test])
 
 (defn -main [& _]
   (let [loaded (reduce (fn [acc ns-sym]
