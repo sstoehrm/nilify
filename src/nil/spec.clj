@@ -27,3 +27,29 @@
                     {:type   :nil/invalid-spec
                      :spec   spec
                      :errors (me/humanize (m/explain FeatureSpec spec))}))))
+
+(def Component
+  [:map
+   [:feature :keyword]
+   [:lang    :keyword]])
+
+(def Endpoint
+  [:tuple :keyword :keyword [:enum :input :output]])
+
+(def Connection
+  [:tuple Endpoint Endpoint])
+
+(def SystemSpec
+  [:map
+   [:id          :keyword]
+   [:desc        {:optional true} :string]
+   [:components  [:map-of :keyword Component]]
+   [:connections {:optional true} [:vector Connection]]])
+
+(defn validate-system! [system]
+  (if (m/validate SystemSpec system)
+    system
+    (throw (ex-info "invalid-system"
+                    {:type   :nil/invalid-system
+                     :system system
+                     :errors (me/humanize (m/explain SystemSpec system))}))))
