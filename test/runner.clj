@@ -2,16 +2,12 @@
   (:require [clojure.test :as t]))
 
 (def test-namespaces
-  '[drill.spec-test
-    drill.registry-test
-    drill.runtime-test
-    drill.drift-test
-    drill.prompt-test
-    drill.generator-test
-    drill.produce-test
-    drill.core-test
-    drill.trace-test
-    end-to-end-test])
+  '[nil.spec-test
+    nil.registry-test
+    nil.runtime-test
+    nil.verify-test
+    nil.core-test
+    nil.init-test])
 
 (defn -main [& _]
   (let [loaded (reduce (fn [acc ns-sym]
