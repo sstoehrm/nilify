@@ -3,11 +3,8 @@
 
 (def test-namespaces
   '[nil.spec-test
-    nil.registry-test
-    nil.runtime-test
-    nil.verify-test
-    nil.core-test
-    nil.init-test])
+    nil.validate-test
+    nil.core-test])
 
 (defn -main [& _]
   (let [loaded (reduce (fn [acc ns-sym]
