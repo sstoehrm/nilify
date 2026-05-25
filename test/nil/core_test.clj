@@ -12,6 +12,7 @@
         (.delete f)))))
 
 (use-fixtures :each (fn [f]
+                      (nil-core/clear!)
                       (delete-tree *test-dir*)
                       (.mkdirs (io/file *test-dir* "features"))
                       (.mkdirs (io/file *test-dir* "systems"))
@@ -73,3 +74,45 @@
     (let [results (nil-core/validate-all (str *test-dir* "/features")
                                          (str *test-dir* "/systems"))]
       (is (= 1 (count (:example-results results)))))))
+
+;; --- Runtime API tests ---
+
+(deftest feature-returns-callable
+  (testing "feature registers spec and returns a callable"
+    (let [spec {:id :math
+                :cases {:add {:input [:tuple [:= :add] :int :int]
+                              :output :int}}}
+          f (nil-core/feature spec)]
+      (nil-core/register-impl! :math (fn [[_tag a b]] (+ a b)))
+      (is (= 5 (f :add 2 3))))))
+
+(deftest produce-returns-callable
+  (testing "produce registers spec and returns a callable"
+    (let [spec {:id :echo
+                :cases {:echo {:input [:tuple [:= :echo] :string]
+                               :output :string}}}
+          f (nil-core/produce spec)]
+      (nil-core/register-impl! :echo (fn [[_tag s]] s))
+      (is (= "hello" (f :echo "hello"))))))
+
+(deftest system-calls-function
+  (testing "system executes the provided function"
+    (let [called (atom false)]
+      (nil-core/system {:id :test :lang :babashka}
+                       (fn [] (reset! called true)))
+      (is @called))))
+
+(deftest reg-main-and-main
+  (testing "reg-main registers a main fn, main calls it"
+    (let [result (atom nil)]
+      (nil-core/reg-main (fn [& args] (reset! result args)))
+      (nil-core/main "a" "b")
+      (is (= '("a" "b") @result)))))
+
+(deftest feature-throws-on-missing-impl
+  (testing "calling a feature without a registered impl throws"
+    (let [spec {:id :noimpl
+                :cases {:x {:input [:tuple [:= :x]] :output :any}}}
+          f (nil-core/feature spec)]
+      (is (thrown-with-msg? Exception #"impl-missing"
+            (f :x))))))
