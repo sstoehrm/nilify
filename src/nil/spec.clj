@@ -13,6 +13,7 @@
 (def FeatureSpec
   [:map
    [:id    :keyword]
+   [:lang  {:optional true} :keyword]
    [:desc  {:optional true} :string]
    [:deps  {:optional true} [:vector :keyword]]
    [:cases [:and
