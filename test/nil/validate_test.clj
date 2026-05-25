@@ -39,3 +39,52 @@
           result (validate/check-examples spec)]
       (is (= :pass (:status result)))
       (is (zero? (count (:results result)))))))
+
+(deftest compatible-connection-passes
+  (testing "returns :pass when output schema is compatible with input schema"
+    (let [features {:translate {:id :translate
+                                :cases {:translate {:input [:map [:query :string]]
+                                                    :output [:map [:expr :string]]}}}
+                    :compute   {:id :compute
+                                :cases {:eval {:input [:map [:expr :string]]
+                                               :output [:map [:result :double]]}}}}
+          system {:id :calc
+                  :components {:translate {:feature :translate :lang :python}
+                               :compute   {:feature :compute   :lang :babashka}}
+                  :connections [[[:translate :translate :output] [:compute :eval :input]]]}
+          result (validate/check-connections system features)]
+      (is (= :pass (:status result))))))
+
+(deftest incompatible-connection-fails
+  (testing "returns :fail when output schema doesn't match input schema"
+    (let [features {:translate {:id :translate
+                                :cases {:translate {:input [:map [:query :string]]
+                                                    :output [:map [:expr :int]]}}}
+                    :compute   {:id :compute
+                                :cases {:eval {:input [:map [:expr :string]]
+                                               :output [:map [:result :double]]}}}}
+          system {:id :calc
+                  :components {:translate {:feature :translate :lang :python}
+                               :compute   {:feature :compute   :lang :babashka}}
+                  :connections [[[:translate :translate :output] [:compute :eval :input]]]}
+          result (validate/check-connections system features)]
+      (is (= :fail (:status result)))
+      (is (= :incompatible (:failure (first (:results result))))))))
+
+(deftest system-with-no-connections-passes-validation
+  (testing "returns :pass when system has no connections"
+    (let [features {:x {:id :x :cases {:a {:input :any :output :any}}}}
+          system {:id :s :components {:x {:feature :x :lang :go}}}
+          result (validate/check-connections system features)]
+      (is (= :pass (:status result)))
+      (is (zero? (count (:results result)))))))
+
+(deftest connection-references-missing-feature
+  (testing "returns :fail when connection references a feature not in the features map"
+    (let [features {}
+          system {:id :s
+                  :components {:x {:feature :x :lang :go}}
+                  :connections [[[:x :a :output] [:y :b :input]]]}
+          result (validate/check-connections system features)]
+      (is (= :fail (:status result)))
+      (is (= :missing-feature (:failure (first (:results result))))))))
