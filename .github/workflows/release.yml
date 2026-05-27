@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Babashka
+        uses: DeLaGuardo/setup-clojure@12.5
+        with:
+          bb: latest
+
+      - name: Run tests
+        run: bb test/runner.clj
+
+      - name: Verify CLI version matches tag
+        run: |
+          cli_version=$(grep 'def version' nilify | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$cli_version" != "$tag_version" ]; then
+            echo "Error: CLI version ($cli_version) does not match tag ($tag_version)"
+            exit 1
+          fi
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            nilify
+            install.sh
+          generate_release_notes: true
