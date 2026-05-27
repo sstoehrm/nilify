@@ -244,15 +244,18 @@
 
 ;; ---- Main ----
 
-(let [args *command-line-args*
-      cmd (first args)]
-  (case cmd
-    "init"     (cmd-init)
-    "validate" (cmd-validate)
-    "update"   (cmd-update)
-    "version"  (cmd-version)
-    "help"     (cmd-help)
-    nil        (cmd-help)
-    (do (println (str "Unknown command: " cmd))
-        (cmd-help)
-        (System/exit 1))))
+(defn -main [& args]
+  (let [cmd (first args)]
+    (case cmd
+      "init"     (cmd-init)
+      "validate" (cmd-validate)
+      "update"   (cmd-update)
+      "version"  (cmd-version)
+      "help"     (cmd-help)
+      nil        (cmd-help)
+      (do (println (str "Unknown command: " cmd))
+          (cmd-help)
+          (System/exit 1)))))
+
+(when (= *file* (System/getProperty "babashka.file"))
+  (apply -main *command-line-args*))

@@ -1,4 +1,4 @@
-{:paths ["src" "test"]
+{:paths ["test"]
  :deps  {metosin/malli {:mvn/version "0.20.1"}}
  :tasks {test {:doc  "Run all nilify tests"
                :task (let [{:keys [out err exit]} (clojure.java.shell/sh "bb" "test/runner.clj")]

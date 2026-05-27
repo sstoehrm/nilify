@@ -2,9 +2,7 @@
   (:require [clojure.test :as t]))
 
 (def test-namespaces
-  '[nilify.spec-test
-    nilify.validate-test
-    nilify.core-test])
+  '[nilify-test])
 
 (defn -main [& _]
   (let [loaded (reduce (fn [acc ns-sym]
