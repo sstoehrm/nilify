@@ -1,4 +1,4 @@
-(ns nil.validate
+(ns nilify.validate
   (:require [malli.core :as m]
             [malli.generator :as mg]))
 

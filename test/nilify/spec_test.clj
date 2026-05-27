@@ -1,6 +1,6 @@
-(ns nil.spec-test
+(ns nilify.spec-test
   (:require [clojure.test :refer [deftest is testing]]
-            [nil.spec :as spec]))
+            [nilify.spec :as spec]))
 
 (deftest valid-feature-spec-passes
   (testing "a well-formed feature spec passes validation"
@@ -16,20 +16,20 @@
     (is (thrown-with-msg? Exception #"invalid-spec"
           (spec/validate-spec! {:cases {:x {:input :any :output :any}}})))))
 
-(deftest spec-requires-cases
-  (testing "spec without :cases throws"
-    (is (thrown-with-msg? Exception #"invalid-spec"
-          (spec/validate-spec! {:id :broken})))))
-
-(deftest spec-requires-at-least-one-case
-  (testing "spec with empty :cases throws"
-    (is (thrown-with-msg? Exception #"invalid-spec"
-          (spec/validate-spec! {:id :broken :cases {}})))))
+(deftest feature-without-cases-passes
+  (testing "feature without :cases is valid (tree-style features use :desc + :internals)"
+    (let [s {:id :ui :desc "a user interface"}]
+      (is (= s (spec/validate-spec! s))))))
 
 (deftest spec-with-deps-passes
   (testing "spec with :deps validates"
     (let [s {:id :calc :deps [:translate :compute]
              :cases {:x {:input [:map [:q :string]] :output [:map [:r :double]]}}}]
+      (is (= s (spec/validate-spec! s))))))
+
+(deftest spec-with-tech-passes
+  (testing "spec with :tech validates"
+    (let [s {:id :db :tech "sqlite" :desc "database layer"}]
       (is (= s (spec/validate-spec! s))))))
 
 (deftest valid-system-spec-passes

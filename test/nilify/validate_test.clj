@@ -1,6 +1,6 @@
-(ns nil.validate-test
+(ns nilify.validate-test
   (:require [clojure.test :refer [deftest is testing]]
-            [nil.validate :as validate]))
+            [nilify.validate :as validate]))
 
 (deftest examples-conforming-to-schemas
   (testing "returns :pass when all examples match their schemas"

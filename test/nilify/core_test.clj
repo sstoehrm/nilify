@@ -1,9 +1,9 @@
-(ns nil.core-test
+(ns nilify.core-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojure.java.io :as io]
-            [nil.core :as nil-core]))
+            [nilify.core :as nilify]))
 
-(def ^:dynamic *test-dir* "test/tmp/nil-v2")
+(def ^:dynamic *test-dir* "test/tmp/nilify")
 
 (defn- delete-tree [dir]
   (let [d (io/file dir)]
@@ -12,7 +12,6 @@
         (.delete f)))))
 
 (use-fixtures :each (fn [f]
-                      (nil-core/clear!)
                       (delete-tree *test-dir*)
                       (.mkdirs (io/file *test-dir* "features"))
                       (.mkdirs (io/file *test-dir* "systems"))
@@ -25,7 +24,7 @@
                    :cases {:add {:input [:map [:a :int] [:b :int]]
                                  :output [:map [:sum :int]]
                                  :examples [{:in {:a 1 :b 2} :out {:sum 3}}]}}}))
-    (let [spec (nil-core/load-spec (str *test-dir* "/features/math.clj"))]
+    (let [spec (nilify/load-spec (str *test-dir* "/features/math.clj"))]
       (is (= :math (:id spec))))))
 
 (deftest load-system-spec
@@ -34,7 +33,7 @@
           (pr-str {:id :calc
                    :components {:math {:feature :math :lang :python}}
                    :connections []}))
-    (let [sys (nil-core/load-system (str *test-dir* "/systems/calc.clj"))]
+    (let [sys (nilify/load-system (str *test-dir* "/systems/calc.clj"))]
       (is (= :calc (:id sys))))))
 
 (deftest validate-checks-examples
@@ -43,7 +42,7 @@
                 :cases {:add {:input [:map [:a :int]]
                               :output [:map [:sum :int]]
                               :examples [{:in {:a 1} :out {:sum 2}}]}}}
-          results (nil-core/validate {:features [spec]})]
+          results (nilify/validate {:features [spec]})]
       (is (= 1 (count (:example-results results))))
       (is (= :pass (:status (first (:example-results results))))))))
 
@@ -59,7 +58,7 @@
                :components {:translate {:feature :translate :lang :python}
                             :compute   {:feature :compute   :lang :babashka}}
                :connections [[[:translate :translate :output] [:compute :eval :input]]]}
-          results (nil-core/validate {:features [f1 f2] :systems [sys]})]
+          results (nilify/validate {:features [f1 f2] :systems [sys]})]
       (is (= 1 (count (:connection-results results))))
       (is (= :pass (:status (first (:connection-results results))))))))
 
@@ -71,48 +70,16 @@
     (spit (str *test-dir* "/systems/s.clj")
           (pr-str {:id :s
                    :components {:a {:feature :a :lang :go}}}))
-    (let [results (nil-core/validate-all (str *test-dir* "/features")
-                                         (str *test-dir* "/systems"))]
+    (let [results (nilify/validate-all (str *test-dir* "/features")
+                                       (str *test-dir* "/systems"))]
       (is (= 1 (count (:example-results results)))))))
 
-;; --- Runtime API tests ---
+(deftest prompt-joins-lines
+  (testing "prompt joins strings with newlines"
+    (is (= "a\nb\nc" (nilify/prompt "a" "b" "c")))))
 
-(deftest feature-returns-callable
-  (testing "feature registers spec and returns a callable"
-    (let [spec {:id :math
-                :cases {:add {:input [:tuple [:= :add] :int :int]
-                              :output :int}}}
-          f (nil-core/feature spec)]
-      (nil-core/register-impl! :math (fn [[_tag a b]] (+ a b)))
-      (is (= 5 (f :add 2 3))))))
-
-(deftest produce-returns-callable
-  (testing "produce registers spec and returns a callable"
-    (let [spec {:id :echo
-                :cases {:echo {:input [:tuple [:= :echo] :string]
-                               :output :string}}}
-          f (nil-core/produce spec)]
-      (nil-core/register-impl! :echo (fn [[_tag s]] s))
-      (is (= "hello" (f :echo "hello"))))))
-
-(deftest system-calls-function
-  (testing "system executes the provided function"
-    (let [called (atom false)]
-      (nil-core/system {:id :test :lang :babashka}
-                       (fn [] (reset! called true)))
-      (is @called))))
-
-(deftest reg-main-and-main
-  (testing "reg-main registers a main fn, main calls it"
-    (let [result (atom nil)]
-      (nil-core/reg-main (fn [& args] (reset! result args)))
-      (nil-core/main "a" "b")
-      (is (= '("a" "b") @result)))))
-
-(deftest feature-throws-on-missing-impl
-  (testing "calling a feature without a registered impl throws"
-    (let [spec {:id :noimpl
-                :cases {:x {:input [:tuple [:= :x]] :output :any}}}
-          f (nil-core/feature spec)]
-      (is (thrown-with-msg? Exception #"impl-missing"
-            (f :x))))))
+(deftest root-returns-tree
+  (testing "root validates and returns the tree"
+    (let [tree [[:system {:id :sys/test :tech "bb"}
+                 [:layer [:feature {:id :feat/x :desc "test"}]]]]]
+      (is (= tree (nilify/root tree))))))

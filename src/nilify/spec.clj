@@ -1,4 +1,4 @@
-(ns nil.spec
+(ns nilify.spec
   (:require [malli.core :as m]
             [malli.error :as me]))
 
@@ -13,19 +13,20 @@
 (def FeatureSpec
   [:map
    [:id    :keyword]
-   [:lang  {:optional true} :keyword]
+   [:tech  {:optional true} :string]
    [:desc  {:optional true} :string]
    [:deps  {:optional true} [:vector :keyword]]
-   [:cases [:and
-            [:map-of :keyword Case]
-            [:fn {:error/message "must have at least one case"}
-             (fn [m] (pos? (count m)))]]]])
+   [:cases {:optional true}
+    [:and
+     [:map-of :keyword Case]
+     [:fn {:error/message "must have at least one case"}
+      (fn [m] (pos? (count m)))]]]])
 
 (defn validate-spec! [spec]
   (if (m/validate FeatureSpec spec)
     spec
     (throw (ex-info "invalid-spec"
-                    {:type   :nil/invalid-spec
+                    {:type   :nilify/invalid-spec
                      :spec   spec
                      :errors (me/humanize (m/explain FeatureSpec spec))}))))
 
@@ -51,6 +52,9 @@
   (if (m/validate SystemSpec system)
     system
     (throw (ex-info "invalid-system"
-                    {:type   :nil/invalid-system
+                    {:type   :nilify/invalid-system
                      :system system
                      :errors (me/humanize (m/explain SystemSpec system))}))))
+
+(defn validate-tree! [tree]
+  tree)

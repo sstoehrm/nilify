@@ -1,5 +1,5 @@
 (ns todo
-  (:require [nil.core :as nilc]))
+  (:require [nilify.core :as nilify]))
 
 (def spec-todo
   [:map
@@ -10,7 +10,7 @@
    [:priority [:enum :high :medium :low]]
    [:status [:enum :new :in-progress :done]]])
 
-(def root (nilc/root
+(def root (nilify/root
            [[:system
              {:id :sys/frontend
               :tech "react"
@@ -18,7 +18,7 @@
              [:layer
               [:feature
                {:id :feat/search-ui
-                :desc (nilc/prompt
+                :desc (nilify/prompt
                        "Search frame input field")
                 :internals {:query-language
                             {"#id" "search for <id>"
@@ -27,16 +27,16 @@
                              :else "Fulltext search on everything"}}}]
               [:feature
                {:id :feat/todo-list-ui
-                :desc (nilc/prompt
+                :desc (nilify/prompt
                        "List with all of the todos with :domain-model/id, :name, :priority and :status, filtered by the :feat/search-ui")}]
               [:feature
                {:id :feat/todo-editor
-                :desc (nilc/prompt
+                :desc (nilify/prompt
                        "Editing the todo for all fields excl. :domain-model/id.")}]]]
             [:system
              {:id :sys/backend
               :tech "http-server babashka"
-              :desc (nilc/prompt
+              :desc (nilify/prompt
                      "HTTP server providing CRUD operations for todos.")
               :provides
               {["HTTP GET" ["/"]]
@@ -54,11 +54,11 @@
              [:layer
               [:feature
                {:id :feat/api
-                :desc (nilc/prompt "Provides :iface/backend-api")}]
+                :desc (nilify/prompt "Provides :iface/backend-api")}]
               [:feature
                {:id :feat/database
                 :tech "sqlite"
-                :desc (nilc/prompt
+                :desc (nilify/prompt
                        "Store the :feat/domain-model inside of sqlite")}]]
              [:layer
               [:feature
