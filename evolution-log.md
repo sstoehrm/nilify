@@ -55,42 +55,71 @@ drill v1 tried to be the driver -- it owned the spec, built the prompt, called t
 
 A second insight: **the spec is the primary artifact, not the code**. SDD-style plan documents grow to thousands of unreadable lines. nil specs stay concise because they declare *what*, not *how*. The generated code is replaceable -- re-derive it anytime. The spec is what you maintain, review, and evolve collaboratively.
 
-## nil-beta: Current state
+## nil-beta v1: Runtime contract layer
 
-A babashka project that installs into target repositories. Deploys two things:
+Built the core runtime: spec validation, registry, tag dispatch with Malli validation, example-based verification. Feature and produce return callables. Deployed via init script into target repos with a Claude Code skill.
 
-**`nil/` folder** -- self-contained with:
-- Runtime: spec validation, registry, tag dispatch with Malli validation, example-based verification
-- `features/` -- spec files (EDN data, one per feature)
-- `generated/` -- implementations (Clojure source, one per feature)
+Realized this still only worked for Babashka -- the runtime dispatch tied nil to one language.
 
-**Claude Code skill** -- teaches the harness the full nil lifecycle: author specs, evolve them collaboratively, generate implementations, verify against specs. Integrates with superpowers (TDD, brainstorming, SDD) and ralph loop.
+## nil-beta v2: Language-agnostic schema validator
 
-### What carries forward
-- Malli schemas for input/output contracts
-- Tag-based dispatch (`(compute :eval "(+ 1 2)")`)
-- Examples as verification (strengthened -- now the primary correctness mechanism)
-- Spec validation on load
-- Registry pattern for implementations
+Stripped the runtime. nil-beta became a pure API contract validator:
 
-### What was cut
-- `*llm-call*`, prompt building, `--generate` -- harness generates code natively
-- CLI application model -- nil is a library
-- Hash-based drift detection -- replaced by verification
-- `produce` (runtime LLM calls) -- deferred
-- Trace/observability -- harness's concern
+- **Feature specs** define typed interfaces with Malli schemas (input/output per case)
+- **System specs** declare components with tech stacks and data flow connections
+- **Validation** checks spec validity, example conformance, and connection compatibility (via `malli.generator` sampling)
+- No code execution -- validation is schema-level only
+
+Added runtime API back as an optional layer for Babashka scripts (`feature`, `produce`, `system` return callables when you need them).
+
+### Research context
+
+Surveyed the landscape: CUE (lattice-based schema subsumption), Structurizr/C4 (architecture-as-code without typed contracts), Kiro/Tessl/Spec Kit (SDD tools with prose specs), TypeSpec/Smithy (API IDLs without system topology). nil-beta occupies a unique niche: typed, machine-checkable contracts at the system architecture level, designed for LLM consumption.
+
+## nil-beta v3 (in progress): Hierarchical system specification language
+
+The flat feature/system model wasn't expressive enough. Real systems have structure -- layers, subsystems, cross-system interfaces. The spec language evolved into a tree:
+
+### Node types
+
+- **`root`** -- one per project, contains systems
+- **`system`** -- a deployable unit with `:id`, `:tech` (free-form string), `:desc`. Contains layers.
+- **`layer`** -- ordered bottom-to-top within a system. Dependencies flow downward only (a layer can use anything in layers below it, never above). Supports standard layered architecture and onion architecture.
+- **`feature`** -- leaf node, the unit of generation. Has `:id`, `:desc`, `:internals`. Can depend on siblings in the same layer and anything in lower layers.
+
+### Naming conventions
+
+Namespaced keywords distinguish reference types by convention:
+- `:sys/` -- system ids (`:sys/frontend`, `:sys/backend`)
+- `:feat/` -- feature ids (`:feat/search-ui`, `:feat/domain-model`)
+- `:iface/` -- interface names (`:iface/backend-api`)
+- `:<feature>/` -- schema fields owned by a feature (`:domain-model/id`)
+
+Fully qualified paths like `:backend/feat/domain-model` are possible but not required.
+
+### Interfaces and connections
+
+Systems expose interfaces via `:provides` -- a map of routes/operations to typed schemas grouped under an `:interface` name. Systems consume interfaces via `:connects-to` -- a simple set of `[system interface]` pairs.
+
+Key design decision: **the consumer doesn't validate the interface shape**. It only declares that it connects to an interface. The provider owns the full contract definition. Validation checks that every referenced interface actually exists. The harness uses the provider's definition to generate both sides.
+
+### Key design decisions
+
+- **`:tech` replaces `:lang`** -- free-form string, more flexible ("react", "http-server babashka", "sqlite")
+- **`:internals`** -- domain knowledge embedded in features (query language DSLs, domain models, screen descriptions). Rich context for the harness without being implementation code.
+- **Shared Malli schemas** -- defined as Clojure vars and referenced across the tree. The schema is the contract; the tree is the structure.
 
 ### Open threads
-- **Host integration**: how target projects consume nil (classpath vs load-file)
-- **Skill distribution**: plugin vs file-in-repo
-- **Multi-language generation**: spec language supports `:lang` but generation is external
-- **Richer verification**: static analysis (clj-kondo), generative testing (malli.generator) as post-generation hooks
-- **`produce` comeback**: runtime LLM calls may return once the spec language is solid
+
+- What the harness does with the tree (generation order, per-system tech adaptation)
+- Whether layers should be explicitly named
+- How `:internals` shapes differ across feature types
+- Visualization from the spec tree (inspired by Structurizr)
 
 ## Branch history
 
 | Branch | Purpose | Status |
 |--------|---------|--------|
-| `main` | Initial scaffolding | Base |
-| `drill-v1-impl` | Full v1 prototype + trace observability | Complete, preserved for reference |
-| `nil-beta` | Reboot as living spec language | Active development |
+| `main` | Active development | Current |
+| `drill-v1-impl` | Full v1 prototype + trace observability | Preserved for reference |
+| `nil-beta` | v1 reboot + v2 schema validator | Merged to main |

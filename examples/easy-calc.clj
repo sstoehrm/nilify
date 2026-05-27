@@ -1,74 +1,41 @@
 (ns easy-calc
   (:require [nil.core :as nilc]))
 
-(def ui
-  (nilc/feature
-   {:id :ui
-    :desc (nilc/prompt
-           "A TUI built with babashka's built-in tools."
-           "Manages a single input field, a confirm dialog, a busy"
-           "indicator, and a result display.")
-    :cases
-    {:get+wait-query
-     {:input  [:tuple [:= :get+wait-query]]
-      :output :string
-      :desc   "Block until the user submits a query; return what they typed."}
+(def spec-query  [:map [:query :string]])
+(def spec-expr   [:map [:expr :string]])
+(def spec-result [:map [:result :double]])
 
-     :confirm+wait-query
-     {:input  [:tuple [:= :confirm+wait-query] :string]
-      :output :boolean
-      :desc   "Show the value to the user; return their yes/no."}
-
-     :set-result
-     {:input  [:tuple [:= :set-result] :string]
-      :output :boolean
-      :desc   "Display the computed result; ack with true on success."}
-
-     :in-progress
-     {:input  [:tuple [:= :in-progress] :boolean]
-      :output :boolean
-      :desc   "Toggle the busy indicator; ack with true."}}}))
-
-(def translate
-  (nilc/produce
-   {:id :translate-query
-    :desc "Translate natural-language queries into Clojure-computable forms."
-    :cases
-    {:translate
-     {:input  [:tuple [:= :translate] :string]
-      :output :string
-      :examples [{:in [:translate "what is two plus two"] :out "(+ 2 2)"}]}}}))
-
-(def compute
-  (nilc/feature
-   {:id :compute
-    :lang :babashka
-    :desc "Evaluate a Clojure expression string in a babashka sci sandbox."
-    :cases
-    {:eval
-     {:input  [:tuple [:= :eval] :string]
-      :output :double
-      :examples [{:in [:eval "(+ 1 2)"] :out 3.0}
-                 {:in [:eval "(* 2.5 4)"] :out 10.0}]}}}))
-
-(defn run [& _]
-  (nilc/system
-   {:id :main-loop
-    :lang :babashka}
-   (fn []
-     (loop []
-       (let [query (ui :get+wait-query)]
-         (ui :in-progress true)
-         (let [expr (translate :translate query)]
-           (ui :in-progress false)
-           (if (ui :confirm+wait-query expr)
-             (do (ui :in-progress true)
-                 (ui :set-result (str (compute :eval expr)))
-                 (ui :in-progress false)
-                 (recur))
-             (recur))))))))
-
-(nilc/reg-main run)
-
-(when (= *file* (System/getProperty "babashka.file"))
-  (apply nilc/main *command-line-args*))
+(def root (nilc/root
+           [[:system
+             {:id :sys/easy-calc
+              :tech "tui babashka"
+              :desc (nilc/prompt
+                     "A TUI calculator that takes natural language math"
+                     "queries, translates them to Clojure expressions,"
+                     "and evaluates them.")}
+             [:layer
+              [:feature
+               {:id :feat/ui
+                :desc (nilc/prompt
+                       "A TUI built with babashka's built-in tools."
+                       "Manages a single input field, a confirm dialog, a busy"
+                       "indicator, and a result display.")
+                :internals {:screens
+                            {:query   "Input field for natural language query"
+                             :confirm "Shows translated expression, yes/no"
+                             :result  "Displays computed result"
+                             :busy    "Spinner while waiting"}}}]]
+             [:layer
+              [:feature
+               {:id :feat/translate
+                :desc (nilc/prompt
+                       "Translate natural-language queries into"
+                       "Clojure-computable expressions.")
+                :internals {"examples"
+                            [{"two plus two" "(+ 2 2)"}
+                             {"square root of 16" "(Math/sqrt 16)"}]}}]
+              [:feature
+               {:id :feat/compute
+                :desc (nilc/prompt
+                       "Evaluate a Clojure expression string"
+                       "in a babashka sci sandbox.")}]]]]))

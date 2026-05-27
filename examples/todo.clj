@@ -3,8 +3,8 @@
 
 (def spec-todo
   [:map
-   {:registry {::id :int}}
-   ::id
+   {:registry {:domain-model/id :int}}
+   :domain-model/id
    [:name :string]
    [:body :string]
    [:priority [:enum :high :medium :low]]
@@ -12,13 +12,12 @@
 
 (def root (nilc/root
            [[:system
-             {:id :frontend
-              :lang :typescript
-              :techstack "react"
-              :connects-to #{[:backend :backend-api]}}
+             {:id :sys/frontend
+              :tech "react"
+              :connects-to #{[:sys/backend :iface/backend-api]}}
              [:layer
               [:feature
-               {:id :search-ui
+               {:id :feat/search-ui
                 :desc (nilc/prompt
                        "Search frame input field")
                 :internals {:query-language
@@ -27,45 +26,41 @@
                              "*status" "search for a *status"
                              :else "Fulltext search on everything"}}}]
               [:feature
-               {:id :todo-list-ui
+               {:id :feat/todo-list-ui
                 :desc (nilc/prompt
-                       "List with all of the todos with ::id, :name, :priority and :status, filtered by the :search-ui")}]
+                       "List with all of the todos with :domain-model/id, :name, :priority and :status, filtered by the :feat/search-ui")}]
               [:feature
-               {:id :todo-editor
+               {:id :feat/todo-editor
                 :desc (nilc/prompt
-                       "Editing the todo for all fields excl. ::id.")}]]]
+                       "Editing the todo for all fields excl. :domain-model/id.")}]]]
             [:system
-             {:id :backend
-              :lang :babashka
-              :techstack "http-server"
+             {:id :sys/backend
+              :tech "http-server babashka"
               :desc (nilc/prompt
-                     "A TUI built with babashka's built-in tools."
-                     "Manages a single input field, a confirm dialog, a busy"
-                     "indicator, and a result display.")
+                     "HTTP server providing CRUD operations for todos.")
               :provides
               {["HTTP GET" ["/"]]
-               {:interface :backend-api
+               {:interface :iface/backend-api
                 :input []
-                :output [:vector-of spec-todo]}
+                :output [:vector spec-todo]}
                ["HTTP POST" ["/"]]
-               {:interface :backend-api
+               {:interface :iface/backend-api
                 :input spec-todo
                 :output []}
-               ["HTTP UPDATE" ["/" ::id]]
-               {:interface :backend-api
+               ["HTTP UPDATE" ["/" :domain-model/id]]
+               {:interface :iface/backend-api
                 :input spec-todo
-                :output []}}
-              [:layer
-               [:feature
-                {:id :api
-                 :desc (nilc/prompt "Provides interfaces :backend-api")}]
-               [:feature
-                {:id :database
-                 :tech "sqlite"
-                 :desc (nilc/prompt
-                        "Store the :domain-model inside of sqlite")}]]
-              [:layer
-               [:feature
-                {:id :domain-model
-                 :internals {"domain-model" spec-todo}}]]}]]))
-
+                :output []}}}
+             [:layer
+              [:feature
+               {:id :feat/api
+                :desc (nilc/prompt "Provides :iface/backend-api")}]
+              [:feature
+               {:id :feat/database
+                :tech "sqlite"
+                :desc (nilc/prompt
+                       "Store the :feat/domain-model inside of sqlite")}]]
+             [:layer
+              [:feature
+               {:id :feat/domain-model
+                :internals {"domain-model"" spec-todo}}]]]]))
