@@ -6,38 +6,61 @@ A language-agnostic system specification language for LLM-fused development. Def
 
 Specs are the primary artifact. You declare *what* the system does -- typed interfaces, layer dependencies, cross-system connections -- and the harness (Claude Code, superpowers, ralph loop) derives the code. The spec stays concise and readable; the code is replaceable.
 
+## Install
+
+Requires [Babashka](https://github.com/babashka/babashka).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sstoehrm/nilify/main/install.sh | bash
+```
+
+Or download the `nilify` script directly into your PATH:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sstoehrm/nilify/main/nilify -o ~/.local/bin/nilify && chmod +x ~/.local/bin/nilify
+```
+
+## Usage
+
+```bash
+nilify init       # Create nil/ folders, deploy skills into .claude/skills/
+nilify validate   # Validate specs in nil/features/ and nil/systems/
+nilify update     # Update nilify CLI to the latest version
+nilify version    # Show version
+```
+
 ## Quick example
 
 ```clojure
 (ns easy-calc
-  (:require [nil.core :as nilc]))
+  (:require [nilify.core :as nilify]))
 
 (def spec-query  [:map [:query :string]])
 (def spec-expr   [:map [:expr :string]])
 (def spec-result [:map [:result :double]])
 
-(def root (nilc/root
+(def root (nilify/root
            [[:system
              {:id :sys/easy-calc
               :tech "tui babashka"
-              :desc (nilc/prompt
+              :desc (nilify/prompt
                      "A TUI calculator that takes natural language math"
                      "queries, translates them to Clojure expressions,"
                      "and evaluates them.")}
              [:layer
               [:feature
                {:id :feat/ui
-                :desc (nilc/prompt
+                :desc (nilify/prompt
                        "A TUI with input, confirm, result, and busy screens.")}]]
              [:layer
               [:feature
                {:id :feat/translate
-                :desc (nilc/prompt
+                :desc (nilify/prompt
                        "Translate natural-language queries into"
                        "Clojure-computable expressions.")}]
               [:feature
                {:id :feat/compute
-                :desc (nilc/prompt
+                :desc (nilify/prompt
                        "Evaluate a Clojure expression string"
                        "in a babashka sci sandbox.")}]]]]))
 ```
@@ -93,7 +116,7 @@ Three levels, no code executed:
 3. **Connection compatibility** -- connected schemas are type-compatible (via `malli.generator` sampling)
 
 ```bash
-bb -e '(require (quote nil.core)) (clojure.pprint/pprint (nil.core/validate-all "nil/features" "nil/systems"))'
+nilify validate
 ```
 
 ## Skills
@@ -110,28 +133,16 @@ nilify ships a skill suite that composes with [superpowers](https://github.com/a
 | `nilify:extract` | Reverse-engineer specs from existing codebases |
 | `nilify:diff` | Diff spec state vs last generated state |
 
-## Prerequisites
-
-- [Babashka](https://github.com/babashka/babashka)
-
-## Setup
-
-```edn
-;; bb.edn
-{:paths ["src"]
- :deps  {metosin/malli {:mvn/version "0.16.4"}}}
-```
-
-## Running tests
-
-```bash
-bb test/runner.clj
-```
-
 ## Examples
 
 - [`examples/easy-calc.clj`](examples/easy-calc.clj) -- single-system TUI calculator
 - [`examples/todo.clj`](examples/todo.clj) -- multi-system CRUD app (React + Babashka + SQLite)
+
+## Development
+
+```bash
+bb test/runner.clj    # Run tests
+```
 
 ## License
 
