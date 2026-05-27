@@ -1,58 +1,94 @@
-# nil-beta
+# nilify
 
-A language-agnostic API contract validator for LLM-fused development. Define typed interfaces with Malli schemas, declare systems with tech stacks, and validate that component contracts are compatible -- without executing any code.
+A language-agnostic system specification language for LLM-fused development. Define your architecture as a tree of typed specs, validate contracts between components, and let the harness generate implementations in any tech stack.
 
-Specs are the primary artifact. Implementations are derived in whatever language the system declares. The harness (Claude Code, superpowers, ralph loop) drives generation; nil-beta validates the contracts.
+## The idea
 
-## Feature specs
+Specs are the primary artifact. You declare *what* the system does -- typed interfaces, layer dependencies, cross-system connections -- and the harness (Claude Code, superpowers, ralph loop) derives the code. The spec stays concise and readable; the code is replaceable.
 
-A feature defines a typed interface -- what goes in, what comes out:
-
-```clojure
-;; nil/features/translate.clj
-{:id :translate
- :desc "Translate natural-language queries into computable forms"
- :cases
- {:translate
-  {:input  [:map [:query :string]]
-   :output [:map [:expression :string]]
-   :desc   "Convert natural language to an expression"
-   :examples [{:in {:query "two plus two"} :out {:expression "(+ 2 2)"}}]}}}
-```
-
-| Field    | Required | Description |
-|----------|----------|-------------|
-| `:id`    | yes      | Unique keyword identifying the feature |
-| `:cases` | yes      | Map of case names to typed case definitions |
-| `:desc`  | no       | Natural-language description |
-| `:deps`  | no       | Vector of feature ids this feature depends on |
-| `:lang`  | no       | Implementation language hint (free-form keyword) |
-
-Each case has `:input` and `:output` (Malli schemas), optional `:desc` and `:examples`.
-
-## System specs
-
-A system declares components, their tech stacks, and data flow connections:
+## Quick example
 
 ```clojure
-;; nil/systems/calculator.clj
-{:id :calculator
- :desc "Natural language calculator"
- :components
- {:translate {:feature :translate :lang :python}
-  :compute   {:feature :compute   :lang :babashka}
-  :ui        {:feature :ui        :lang :typescript}}
- :connections
- [[[:translate :translate :output] [:compute :eval :input]]]}
+(ns easy-calc
+  (:require [nil.core :as nilc]))
+
+(def spec-query  [:map [:query :string]])
+(def spec-expr   [:map [:expr :string]])
+(def spec-result [:map [:result :double]])
+
+(def root (nilc/root
+           [[:system
+             {:id :sys/easy-calc
+              :tech "tui babashka"
+              :desc (nilc/prompt
+                     "A TUI calculator that takes natural language math"
+                     "queries, translates them to Clojure expressions,"
+                     "and evaluates them.")}
+             [:layer
+              [:feature
+               {:id :feat/ui
+                :desc (nilc/prompt
+                       "A TUI with input, confirm, result, and busy screens.")}]]
+             [:layer
+              [:feature
+               {:id :feat/translate
+                :desc (nilc/prompt
+                       "Translate natural-language queries into"
+                       "Clojure-computable expressions.")}]
+              [:feature
+               {:id :feat/compute
+                :desc (nilc/prompt
+                       "Evaluate a Clojure expression string"
+                       "in a babashka sci sandbox.")}]]]]))
 ```
 
-Connections declare that one component's output feeds another's input. nil-beta validates that the schemas are compatible.
+## Spec tree
+
+nilify defines systems as a hierarchical tree:
+
+```
+root
+  system (:tech, :provides, :connects-to)
+    layer (ordered bottom-to-top)
+      feature (:desc, :internals)
+```
+
+- **root** -- one per project, contains systems
+- **system** -- a deployable unit with a tech stack. Exposes interfaces via `:provides`, consumes them via `:connects-to`
+- **layer** -- ordered bottom-to-top. Dependencies flow downward only
+- **feature** -- leaf node. The unit of generation
+
+### Naming conventions
+
+| Prefix | Meaning | Example |
+|--------|---------|---------|
+| `:sys/` | System id | `:sys/backend` |
+| `:feat/` | Feature id | `:feat/domain-model` |
+| `:iface/` | Interface name | `:iface/backend-api` |
+| `:<feature>/` | Schema field owned by a feature | `:domain-model/id` |
+
+### Interfaces
+
+Systems expose interfaces via `:provides` -- typed routes/operations grouped under an `:interface` name. Consumers declare `:connects-to` with `[system interface]` pairs. The provider owns the contract; the consumer just declares it connects.
+
+### Shared schemas
+
+Malli schemas defined as Clojure vars and referenced across the tree:
+
+```clojure
+(def spec-todo
+  [:map
+   :domain-model/id
+   [:name :string]
+   [:priority [:enum :high :medium :low]]
+   [:status [:enum :new :in-progress :done]]])
+```
 
 ## Validation
 
-Three levels of validation, no code executed:
+Three levels, no code executed:
 
-1. **Spec validity** -- feature and system specs are well-formed
+1. **Spec validity** -- specs are well-formed per Malli schemas
 2. **Example conformance** -- each example's input/output conforms to its schema
 3. **Connection compatibility** -- connected schemas are type-compatible (via `malli.generator` sampling)
 
@@ -60,42 +96,19 @@ Three levels of validation, no code executed:
 bb -e '(require (quote nil.core)) (clojure.pprint/pprint (nil.core/validate-all "nil/features" "nil/systems"))'
 ```
 
-## Runtime API
+## Skills
 
-For Babashka scripts, nil-beta also provides runtime dispatch with Malli validation:
+nilify ships a skill suite that composes with [superpowers](https://github.com/anthropics/claude-code-plugins) and ralph loop:
 
-```clojure
-(ns my-app
-  (:require [nil.core :as nil]))
-
-(def compute
-  (nil/feature
-   {:id :compute
-    :lang :babashka
-    :desc "Evaluate expressions"
-    :cases
-    {:eval {:input  [:tuple [:= :eval] :string]
-            :output :double
-            :examples [{:in [:eval "(+ 1 2)"] :out 3.0}]}}}))
-
-;; Once an implementation is registered:
-(compute :eval "(+ 2 2)") ;; => 4.0
-```
-
-- **`feature`** / **`produce`** -- register a spec, return a callable with I/O validation
-- **`system`** -- wraps a function as a component boundary
-- **`reg-main`** / **`main`** -- CLI entry point utilities
-
-## Folder structure
-
-```
-nil/
-  core.clj          Public API: validation + runtime
-  spec.clj          Feature + system spec schemas (Malli)
-  validate.clj      Example conformance + connection compatibility
-  features/         Feature spec files (EDN)
-  systems/          System spec files (EDN)
-```
+| Skill | Purpose |
+|-------|---------|
+| `nilify` | Entry point -- detect project, explain model, route to subskills |
+| `nilify:onboard` | Onboard to a nilify project with architecture context |
+| `nilify:author` | Create and evolve specs through dialogue |
+| `nilify:validate` | Run schema validation and compatibility checks |
+| `nilify:generate` | Derive implementations from specs via superpowers |
+| `nilify:extract` | Reverse-engineer specs from existing codebases |
+| `nilify:diff` | Diff spec state vs last generated state |
 
 ## Prerequisites
 
@@ -115,8 +128,11 @@ nil/
 bb test/runner.clj
 ```
 
-28 tests, 37 assertions.
+## Examples
+
+- [`examples/easy-calc.clj`](examples/easy-calc.clj) -- single-system TUI calculator
+- [`examples/todo.clj`](examples/todo.clj) -- multi-system CRUD app (React + Babashka + SQLite)
 
 ## License
 
-All rights reserved.
+Apache License 2.0. See [LICENSE](LICENSE).
