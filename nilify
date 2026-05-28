@@ -1,5 +1,8 @@
 #!/usr/bin/env bb
 
+(require '[babashka.deps :as deps])
+(deps/add-deps '{:deps {metosin/malli {:mvn/version "0.20.1"}}})
+
 (ns nilify.cli
   (:require [babashka.http-client :as http]
             [clojure.edn :as edn]
