@@ -1,9 +1,9 @@
 ---
-name: nilify:author
+name: nilify-author
 description: Create and evolve nilify specs through dialogue. Produces spec files with the tree structure (root, system, layer, feature). Use when the user wants to define or modify the system architecture.
 ---
 
-# nilify:author
+# nilify-author
 
 Create new nilify specs or evolve existing ones through collaborative dialogue.
 
@@ -25,14 +25,14 @@ Create new nilify specs or evolve existing ones through collaborative dialogue.
 5. **Define interfaces** -- if multiple systems, what connects them? `:provides` on the provider, `:connects-to` on the consumer.
 6. **Define shared schemas** -- what data flows between features? Define as Malli schemas.
 7. **Write the spec file** -- one file per project using `nilc/root`, or separate files in `nil/features/` and `nil/systems/`
-8. **Invoke `nilify:validate`** to check consistency
+8. **Invoke `nilify-validate`** to check consistency
 
 ### Evolving existing specs
 
-1. **Read the current spec tree** (invoke `nilify:diff` to understand current state)
+1. **Read the current spec tree** (invoke `nilify-diff` to understand current state)
 2. **Discuss the change** with the user -- what and why
 3. **Make the change** -- add/modify/remove nodes
-4. **Invoke `nilify:validate`** to check nothing broke
+4. **Invoke `nilify-validate`** to check nothing broke
 5. **Explain the impact** -- which features/systems are affected
 
 ## Authoring guidelines

@@ -1,16 +1,16 @@
 ---
-name: nilify:diff
-description: Utility skill for diffing spec state vs generated state. Used by nilify:generate and nilify:validate to determine what changed. Not typically invoked directly by users.
+name: nilify-diff
+description: Utility skill for diffing spec state vs generated state. Used by nilify-generate and nilify-validate to determine what changed. Not typically invoked directly by users.
 ---
 
-# nilify:diff
+# nilify-diff
 
 Compare the current nilify spec tree against the last generated state. Determines which features are new, modified, or removed since the last generation pass.
 
 ## When to use this skill
 
-- Invoked by `nilify:generate` to determine what needs regeneration
-- Invoked by `nilify:author` after spec changes to show impact
+- Invoked by `nilify-generate` to determine what needs regeneration
+- Invoked by `nilify-author` after spec changes to show impact
 - User asks "what changed" or "what needs regeneration"
 
 ## How it works
@@ -63,7 +63,7 @@ Spec diff:
 
 ## State file
 
-The state file `.nil/state.edn` is written by `nilify:generate` after a successful generation pass. It contains:
+The state file `.nil/state.edn` is written by `nilify-generate` after a successful generation pass. It contains:
 
 ```clojure
 {:generated-at "2026-05-27T10:00:00Z"
@@ -72,4 +72,4 @@ The state file `.nil/state.edn` is written by `nilify:generate` after a successf
   :feat/api          {:hash "d4e5f6" :system :sys/backend}}}
 ```
 
-If the project doesn't have a state file yet, `nilify:diff` reports all features as `:new`.
+If the project doesn't have a state file yet, `nilify-diff` reports all features as `:new`.

@@ -1,16 +1,16 @@
 ---
-name: nilify:validate
+name: nilify-validate
 description: Validate nilify spec consistency -- spec well-formedness, example conformance against schemas, and connection compatibility between systems. Use when checking specs after authoring or before generation.
 ---
 
-# nilify:validate
+# nilify-validate
 
 Run schema-level validation on nilify specs. No code is executed.
 
 ## When to use this skill
 
-- After authoring or modifying specs (invoked by `nilify:author`)
-- Before generating implementations (invoked by `nilify:generate`)
+- After authoring or modifying specs (invoked by `nilify-author`)
+- Before generating implementations (invoked by `nilify-generate`)
 - User asks to "validate", "check", or "verify" the specs
 - CI/pre-commit check
 
@@ -61,6 +61,6 @@ Validation results:
 
 ## When validation fails
 
-- **Spec validity failure** -- fix the spec structure. Invoke `nilify:author` if the user needs help.
+- **Spec validity failure** -- fix the spec structure. Invoke `nilify-author` if the user needs help.
 - **Example conformance failure** -- either the example or the schema is wrong. Ask the user which to fix.
 - **Connection incompatibility** -- the systems disagree on the interface contract. The provider's `:provides` schema is the source of truth. Fix the consumer's expectations or update the provider.

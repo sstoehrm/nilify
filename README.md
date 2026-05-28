@@ -135,12 +135,12 @@ nilify ships a skill suite that composes with [superpowers](https://github.com/a
 | Skill | Purpose |
 |-------|---------|
 | `nilify` | Entry point -- detect project, explain model, route to subskills |
-| `nilify:onboard` | Onboard to a nilify project with architecture context |
-| `nilify:author` | Create and evolve specs through dialogue |
-| `nilify:validate` | Run schema validation and compatibility checks |
-| `nilify:generate` | Derive implementations from specs via superpowers |
-| `nilify:extract` | Reverse-engineer specs from existing codebases |
-| `nilify:diff` | Diff spec state vs last generated state |
+| `nilify-onboard` | Onboard to a nilify project with architecture context |
+| `nilify-author` | Create and evolve specs through dialogue |
+| `nilify-validate` | Run schema validation and compatibility checks |
+| `nilify-generate` | Derive implementations from specs via superpowers |
+| `nilify-extract` | Reverse-engineer specs from existing codebases |
+| `nilify-diff` | Diff spec state vs last generated state |
 
 ## Examples
 

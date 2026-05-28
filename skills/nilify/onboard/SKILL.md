@@ -1,9 +1,9 @@
 ---
-name: nilify:onboard
+name: nilify-onboard
 description: Onboard to a nilify project. Wraps superpowers onboarding with nilify-specific context -- spec tree, systems, tech stacks, naming conventions.
 ---
 
-# nilify:onboard
+# nilify-onboard
 
 Onboard a new contributor (human or agent) to a nilify project. Builds on the standard superpowers onboarding and adds nilify-specific context.
 

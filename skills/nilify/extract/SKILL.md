@@ -1,9 +1,9 @@
 ---
-name: nilify:extract
-description: Analyze an existing codebase and produce a nilify spec tree from it. Reverse of nilify:generate -- goes from code to specs. Use when adopting nil in an existing project.
+name: nilify-extract
+description: Analyze an existing codebase and produce a nilify spec tree from it. Reverse of nilify-generate -- goes from code to specs. Use when adopting nil in an existing project.
 ---
 
-# nilify:extract
+# nilify-extract
 
 Read an existing codebase and produce a nilify spec tree that describes its architecture.
 
@@ -75,7 +75,7 @@ Produce the spec file(s) and present to the user for review. The extracted spec 
 
 ### 8. Validate
 
-Invoke `nilify:validate` on the extracted specs.
+Invoke `nilify-validate` on the extracted specs.
 
 ## Guidelines
 
@@ -83,6 +83,6 @@ Invoke `nilify:validate` on the extracted specs.
 
 **Ask the user.** When boundaries are ambiguous ("is this one feature or two?"), ask rather than guess.
 
-**The extraction is a draft.** Present it and iterate with the user via `nilify:author`.
+**The extraction is a draft.** Present it and iterate with the user via `nilify-author`.
 
 **Preserve existing naming.** Use the project's own terminology for feature names and descriptions. Don't rename things.

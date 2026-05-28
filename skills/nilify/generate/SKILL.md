@@ -1,9 +1,9 @@
 ---
-name: nilify:generate
+name: nilify-generate
 description: Derive implementations from nilify specs. Reads the spec tree, respects layer ordering and :tech declarations, dispatches generation via superpowers skills. Use when the user wants to generate code from specs.
 ---
 
-# nilify:generate
+# nilify-generate
 
 Generate implementations from nilify specs. This skill orchestrates generation -- it reads the tree, determines order and tech stack, and delegates actual code writing to superpowers skills.
 
@@ -11,15 +11,15 @@ Generate implementations from nilify specs. This skill orchestrates generation -
 
 - User asks to "generate", "implement", or "build" from specs
 - User asks to implement a specific feature or system
-- After `nilify:author` completes a new spec
+- After `nilify-author` completes a new spec
 
 ## Process
 
 ### 1. Read the spec tree
 
-Load all specs. Invoke `nilify:validate` first -- do not generate from invalid specs.
+Load all specs. Invoke `nilify-validate` first -- do not generate from invalid specs.
 
-### 2. Invoke `nilify:diff` 
+### 2. Invoke `nilify-diff` 
 
 Determine what changed since last generation. Only generate for new or modified features unless the user asks for a full regeneration.
 
@@ -60,7 +60,7 @@ Order: generate systems that only provide (no `:connects-to`) before systems tha
 
 ### 6. Verify after generation
 
-After all features are generated, invoke `nilify:validate` again to confirm the implementation matches the spec contracts.
+After all features are generated, invoke `nilify-validate` again to confirm the implementation matches the spec contracts.
 
 ## What this skill does NOT do
 
@@ -73,4 +73,4 @@ After all features are generated, invoke `nilify:validate` again to confirm the 
 - **`superpowers:subagent-driven-development`** -- one subagent per feature, with spec review and code quality review
 - **`superpowers:dispatching-parallel-agents`** -- features in the same layer generated concurrently
 - **`superpowers:test-driven-development`** -- subagents use TDD, with spec examples as the initial test cases
-- **`superpowers:verification-before-completion`** -- run `nilify:validate` before claiming done
+- **`superpowers:verification-before-completion`** -- run `nilify-validate` before claiming done

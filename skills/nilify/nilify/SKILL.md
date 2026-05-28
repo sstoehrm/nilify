@@ -53,12 +53,12 @@ Route to these based on what the user is doing:
 
 | Subskill | When to invoke |
 |----------|----------------|
-| `nilify:author` | User wants to create or evolve specs |
-| `nilify:validate` | User wants to check spec consistency |
-| `nilify:generate` | User wants to derive implementations from specs |
-| `nilify:extract` | User wants to produce nilify specs from existing code |
-| `nilify:onboard` | User is new to the project and needs context |
-| `nilify:diff` | (Internal) Other nilify skills need to diff spec vs generated state |
+| `nilify-author` | User wants to create or evolve specs |
+| `nilify-validate` | User wants to check spec consistency |
+| `nilify-generate` | User wants to derive implementations from specs |
+| `nilify-extract` | User wants to produce nilify specs from existing code |
+| `nilify-onboard` | User is new to the project and needs context |
+| `nilify-diff` | (Internal) Other nilify skills need to diff spec vs generated state |
 
 ## Example spec
 

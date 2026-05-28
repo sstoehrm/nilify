@@ -166,22 +166,27 @@
 (def skills
   ["nilify" "author" "validate" "generate" "extract" "onboard" "diff"])
 
+(defn- skill-target-dir [skill-name]
+  (if (= skill-name "nilify")
+    (io/file ".claude" "skills" "nilify")
+    (io/file ".claude" "skills" (str "nilify-" skill-name))))
+
 (defn cmd-init []
   (println "Initializing nilify project...")
   (let [nil-dir (io/file "nil")]
     (.mkdirs (io/file nil-dir "features"))
     (.mkdirs (io/file nil-dir "systems"))
     (println "  Created nil/features/ and nil/systems/"))
-  (let [branch "main"
-        skill-dir (io/file ".claude" "skills" "nilify")]
+  (let [branch "main"]
     (doseq [skill-name skills]
       (let [url (str raw-url "/" branch "/skills/nilify/" skill-name "/SKILL.md")
-            target (io/file skill-dir skill-name "SKILL.md")
-            content (fetch-text url)]
+            target (io/file (skill-target-dir skill-name) "SKILL.md")
+            content (fetch-text url)
+            deployed-name (if (= skill-name "nilify") "nilify" (str "nilify-" skill-name))]
         (if content
           (do (io/make-parents target)
               (spit target content)
-              (println (str "  Deployed skill: " skill-name)))
+              (println (str "  Deployed skill: " deployed-name)))
           (println (str "  Warning: could not fetch skill " skill-name " from " url))))))
   (println "Done."))
 
