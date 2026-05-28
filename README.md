@@ -31,9 +31,12 @@ curl -fsSL https://raw.githubusercontent.com/sstoehrm/nilify/main/nilify -o ~/.l
 ```bash
 nilify init       # Create nil/ folders, deploy skills into .claude/skills/
 nilify validate   # Validate specs in nil/features/ and nil/systems/
+nilify spec       # Print the complete spec reference (all fields documented)
 nilify update     # Update nilify CLI to the latest version
 nilify version    # Show version
 ```
+
+For a complete reference of every field with documentation, run `nilify spec`.
 
 ## Quick example
 

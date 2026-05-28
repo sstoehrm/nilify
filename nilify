@@ -230,6 +230,93 @@
 (defn cmd-version []
   (println (str "nilify " version)))
 
+(def spec-reference
+"; nilify spec reference -- every field documented in one place.
+;
+; A project's specs live in nil/. There are two spec formats:
+;   1. Flat (EDN files in nil/features/ and nil/systems/) -- validated by `nilify validate`
+;   2. Tree  (Clojure script using nilify.core) -- composes specs as data
+
+;; ---------------------------------------------------------------------------
+;; 1. Flat feature spec -- nil/features/<id>.clj
+;; ---------------------------------------------------------------------------
+
+{:id      :feat/compute                  ; required: unique keyword
+ :desc    \"Evaluate Clojure expressions\" ; optional: natural-language purpose
+ :tech    \"babashka\"                    ; optional: free-form tech hint
+ :deps    [:feat/translate]              ; optional: feature ids this depends on
+ :cases                                  ; optional: typed cases
+ {:eval
+  {:input   [:map [:expr :string]]       ; required: Malli schema for input
+   :output  [:map [:result :double]]     ; required: Malli schema for output
+   :desc    \"Parse and evaluate\"        ; optional: case-level description
+   :examples                             ; optional: input/output pairs
+   [{:in {:expr \"(+ 1 2)\"} :out {:result 3.0}}
+    {:in {:expr \"(* 2 4)\"} :out {:result 8.0}}]}}}
+
+;; ---------------------------------------------------------------------------
+;; 2. Flat system spec -- nil/systems/<id>.clj
+;; ---------------------------------------------------------------------------
+
+{:id          :sys/calculator            ; required: unique keyword
+ :desc        \"NL calculator\"           ; optional: description
+ :components                             ; required: map of name -> {:feature :lang}
+ {:translate {:feature :feat/translate :lang :python}
+  :compute   {:feature :feat/compute   :lang :babashka}}
+ :connections                            ; optional: data flow between components
+ [[[:translate :translate :output]       ; from: [component case :input/:output]
+   [:compute   :eval      :input]]]}     ; to:   [component case :input/:output]
+
+;; ---------------------------------------------------------------------------
+;; 3. Tree form -- composes specs as Clojure data
+;; ---------------------------------------------------------------------------
+
+(ns my-project
+  (:require [nilify.core :as nilify]))
+
+(def spec-query  [:map [:query :string]])   ; shared schemas as Clojure vars
+(def spec-result [:map [:result :double]])
+
+(def root (nilify/root
+           [[:system                              ; node type
+             {:id          :sys/backend           ; required
+              :tech        \"http-server babashka\" ; optional: free-form tech
+              :desc        \"REST API\"             ; optional
+              :provides                           ; optional: exposed interfaces
+              {[\"HTTP GET\" [\"/\"]]
+               {:interface :iface/api             ; group routes by interface name
+                :input     []
+                :output    [:vector spec-result]}}
+              :connects-to                        ; optional: consumed interfaces
+              #{[:sys/external :iface/auth]}}
+
+             [:layer                              ; layers ordered bottom-to-top
+              [:feature                           ; foundational features go first
+               {:id        :feat/domain-model
+                :desc      \"Core domain types\"
+                :internals {:domain-model spec-result}}]]
+
+             [:layer                              ; upper layer depends on lower
+              [:feature
+               {:id        :feat/api
+                :tech      \"compojure\"            ; per-feature tech override
+                :desc      (nilify/prompt
+                            \"Provides :iface/api\"
+                            \"Routes documented in :provides above.\")}]]]]))
+
+;; ---------------------------------------------------------------------------
+;; Naming conventions (by convention, not enforced)
+;; ---------------------------------------------------------------------------
+
+;; :sys/<name>            system ids
+;; :feat/<name>           feature ids
+;; :iface/<name>          interface names (for :provides / :connects-to)
+;; :<feature>/<field>     schema fields owned by a feature (e.g. :domain-model/id)
+")
+
+(defn cmd-spec []
+  (println spec-reference))
+
 (defn cmd-help []
   (println "nilify - system specification language for LLM-fused development")
   (println)
@@ -238,6 +325,7 @@
   (println "Commands:")
   (println "  init       Create nil/ folders and deploy skills into .claude/skills/")
   (println "  validate   Validate specs in nil/features/ and nil/systems/")
+  (println "  spec       Print the complete spec reference")
   (println "  update     Update nilify CLI to the latest version")
   (println "  version    Show version")
   (println "  help       Show this help"))
@@ -249,6 +337,7 @@
     (case cmd
       "init"     (cmd-init)
       "validate" (cmd-validate)
+      "spec"     (cmd-spec)
       "update"   (cmd-update)
       "version"  (cmd-version)
       "help"     (cmd-help)
