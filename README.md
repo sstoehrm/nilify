@@ -2,6 +2,12 @@
 
 A language-agnostic system specification language for LLM-fused development. Define your architecture as a tree of typed specs, validate contracts between components, and let the harness generate implementations in any tech stack.
 
+## Why nilify
+
+Spec-driven development tools (Spec Kit, Tessl, Kiro, superpowers SDD) produce prose specifications. As projects grow, these specs become thousands of lines of unreviewable markdown -- you can't see the architecture by skimming. Specs and code drift apart silently.
+
+nilify uses structure instead of prose. A tree of typed specs is scannable: you see all systems, their layers, their features in a few screens. The tree conveys architecture in a way text can't, and machine-checkability (Malli schemas + connection compatibility) keeps specs consistent with code over time.
+
 ## The idea
 
 Specs are the primary artifact. You declare *what* the system does -- typed interfaces, layer dependencies, cross-system connections -- and the harness (Claude Code, superpowers, ralph loop) derives the code. The spec stays concise and readable; the code is replaceable.
