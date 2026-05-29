@@ -1,6 +1,8 @@
 (ns nilify-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [clojure.string]
+            [babashka.process]))
 
 (load-file "nilify")
 
@@ -146,3 +148,44 @@
              [:layer [:feature {:id :feat/b}]]]]]]
     (is (seq (cli/check-schemas t)))
     (is (some #(clojure.string/includes? % "sub/m") (cli/check-schemas t)))))
+
+;; ---- validate-all orchestration ----
+
+(deftest validate-all-aggregates-levels
+  (let [ok (cli/validate-all todo-tree)]
+    (is (nil? (:structure ok)))
+    (is (empty? (:references ok)))
+    (is (empty? (:schemas ok))))
+  (let [bad (cli/validate-all [[:system {:id :sys/a
+                                         :connects-to #{[:sys/ghost :iface/x]}}
+                                [:layer [:feature {:id :feat/a}]]]])]
+    (is (seq (:references bad)))))
+
+;; ---- CLI integration ----
+
+(def cli-path (.getAbsolutePath (io/file "nilify")))
+
+(defn- run-validate [dir & args]
+  (apply babashka.process/shell
+         {:out :string :err :string :continue true :dir dir}
+         "bb" cli-path "validate" args))
+
+(deftest validate-cli-passes-on-valid-root
+  (spit (str *test-dir* "/nil/root.clj")
+        (str "(ns p (:require [nilify.core :as nilify]))\n"
+             "(nilify/root [[:system {:id :sys/a "
+             ":desc (nilify/prompt \"x\")} "
+             "[:layer [:feature {:id :feat/a}]]]])\n"))
+  (let [{:keys [exit out]} (run-validate *test-dir*)]
+    (is (zero? exit))
+    (is (clojure.string/includes? out "Structure: ok"))))
+
+(deftest validate-cli-fails-on-bad-reference
+  (spit (str *test-dir* "/nil/root.clj")
+        (str "(ns p (:require [nilify.core :as nilify]))\n"
+             "(nilify/root [[:system {:id :sys/a "
+             ":connects-to #{[:sys/ghost :iface/x]}} "
+             "[:layer [:feature {:id :feat/a}]]]])\n"))
+  (let [{:keys [exit out]} (run-validate *test-dir*)]
+    (is (= 1 exit))
+    (is (clojure.string/includes? out "unknown system"))))

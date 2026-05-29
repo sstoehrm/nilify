@@ -18,7 +18,6 @@
 
 (ns nilify.cli
   (:require [babashka.http-client :as http]
-            [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as string]
             [malli.core :as m]
@@ -29,60 +28,6 @@
 (def version "0.1.0")
 (def repo "sstoehrm/nilify")
 (def raw-url (str "https://raw.githubusercontent.com/" repo))
-
-;; ---- Spec schemas (embedded from src/nilify/spec.clj) ----
-
-(def Case
-  [:map
-   [:input  :any]
-   [:output :any]
-   [:desc     {:optional true} :string]
-   [:examples {:optional true}
-    [:vector [:map [:in :any] [:out :any]]]]])
-
-(def FeatureSpec
-  [:map
-   [:id    :keyword]
-   [:tech  {:optional true} :string]
-   [:desc  {:optional true} :string]
-   [:deps  {:optional true} [:vector :keyword]]
-   [:cases {:optional true}
-    [:and
-     [:map-of :keyword Case]
-     [:fn {:error/message "must have at least one case"}
-      (fn [m] (pos? (count m)))]]]])
-
-(def Component
-  [:map
-   [:feature :keyword]
-   [:lang    :keyword]])
-
-(def Endpoint
-  [:tuple :keyword :keyword [:enum :input :output]])
-
-(def Connection
-  [:tuple Endpoint Endpoint])
-
-(def SystemSpec
-  [:map
-   [:id          :keyword]
-   [:desc        {:optional true} :string]
-   [:components  [:map-of :keyword Component]]
-   [:connections {:optional true} [:vector Connection]]])
-
-(defn validate-spec! [spec]
-  (if (m/validate FeatureSpec spec)
-    spec
-    (throw (ex-info "invalid-spec"
-                    {:type :nilify/invalid-spec :spec spec
-                     :errors (me/humanize (m/explain FeatureSpec spec))}))))
-
-(defn validate-system! [system]
-  (if (m/validate SystemSpec system)
-    system
-    (throw (ex-info "invalid-system"
-                    {:type :nilify/invalid-system :system system
-                     :errors (me/humanize (m/explain SystemSpec system))}))))
 
 ;; ---- Tree spec schemas ----
 
@@ -132,58 +77,6 @@
   [tree]
   (when-not (m/validate Root tree)
     (me/humanize (m/explain Root tree))))
-
-;; ---- Validation (embedded from src/nilify/validate.clj) ----
-
-(defn- check-one-example [case-name case-spec example]
-  (let [{:keys [in out]} example
-        input-ok  (m/validate (:input case-spec) in)
-        output-ok (m/validate (:output case-spec) out)]
-    (cond
-      (not input-ok)  {:case case-name :in in :out out :status :fail :failure :input-mismatch}
-      (not output-ok) {:case case-name :in in :out out :status :fail :failure :output-mismatch}
-      :else           {:case case-name :in in :out out :status :pass})))
-
-(defn check-examples [{:keys [id cases]}]
-  (let [results (vec (for [[case-name case-spec] cases
-                           example (:examples case-spec)]
-                       (check-one-example case-name case-spec example)))]
-    {:id id :check :examples
-     :status (if (every? #(= :pass (:status %)) results) :pass :fail)
-     :results results}))
-
-(def ^:private sample-count 20)
-
-(defn- check-one-connection [system features [source sink]]
-  (let [src-fid (:feature (get (:components system) (first source)))
-        snk-fid (:feature (get (:components system) (first sink)))
-        src-feat (get features src-fid)
-        snk-feat (get features snk-fid)]
-    (cond
-      (not src-feat) {:from source :to sink :status :fail :failure :missing-feature
-                      :detail (str "feature " src-fid " not found")}
-      (not snk-feat) {:from source :to sink :status :fail :failure :missing-feature
-                      :detail (str "feature " snk-fid " not found")}
-      :else
-      (let [out-schema (:output (get-in src-feat [:cases (second source)]))
-            in-schema  (:input  (get-in snk-feat [:cases (second sink)]))]
-        (try
-          (let [samples  (repeatedly sample-count #(mg/generate out-schema))
-                failures (remove #(m/validate in-schema %) samples)]
-            (if (empty? failures)
-              {:from source :to sink :status :pass}
-              {:from source :to sink :status :fail :failure :incompatible
-               :sample (first failures)}))
-          (catch Exception e
-            {:from source :to sink :status :fail :failure :generation-error
-             :detail (ex-message e)}))))))
-
-(defn check-connections [system features]
-  (let [connections (or (:connections system) [])
-        results (vec (map #(check-one-connection system features %) connections))]
-    {:id (:id system) :check :connections
-     :status (if (every? #(= :pass (:status %)) results) :pass :fail)
-     :results results}))
 
 ;; ---- Tree-walk helpers ----
 
@@ -276,28 +169,15 @@
   [path]
   (load-string (slurp path)))
 
-(defn- load-spec [path]
-  (validate-spec! (edn/read-string (slurp path))))
-
-(defn- load-system [path]
-  (validate-system! (edn/read-string (slurp path))))
-
-(defn- load-dir [dir loader]
-  (let [files (->> (file-seq (io/file dir))
-                   (filter #(and (.isFile %) (.endsWith (.getName %) ".clj"))))]
-    (vec (map #(loader (.getPath %)) files))))
-
-(defn- validate-all [features-dir systems-dir]
-  (let [features (if (.isDirectory (io/file features-dir))
-                   (load-dir features-dir load-spec) [])
-        systems  (if (.isDirectory (io/file systems-dir))
-                   (load-dir systems-dir load-system) [])
-        feature-map (into {} (map (juxt :id identity) features))
-        example-results (vec (map check-examples features))
-        connection-results (vec (for [sys systems]
-                                  (check-connections sys feature-map)))]
-    {:example-results example-results
-     :connection-results connection-results}))
+(defn validate-all
+  "Run all three validation passes on an already-loaded tree."
+  [tree]
+  (let [structure (check-structure tree)]
+    (if structure
+      {:structure structure :references [] :schemas []}
+      {:structure nil
+       :references (check-references tree)
+       :schemas    (check-schemas tree)})))
 
 ;; ---- GitHub helpers ----
 
@@ -341,35 +221,29 @@
           (println (str "  Warning: could not fetch skill " skill-name " from " url))))))
   (println "Done."))
 
-(defn cmd-validate []
-  (let [features-dir "nil/features"
-        systems-dir  "nil/systems"]
-    (if (not (.isDirectory (io/file features-dir)))
-      (do (println "No nil/features/ directory found. Run 'nilify init' first.")
-          (System/exit 1))
-      (let [results (validate-all features-dir systems-dir)
-            ex-results (:example-results results)
-            cn-results (:connection-results results)
-            ex-pass (count (filter #(= :pass (:status %)) ex-results))
-            ex-total (count ex-results)
-            cn-pass (count (filter #(= :pass (:status %)) cn-results))
-            cn-total (count cn-results)
-            all-pass (and (= ex-pass ex-total) (= cn-pass cn-total))]
-        (println "Validation results:")
-        (if (zero? ex-total)
-          (println "  No feature specs found.")
-          (println (str "  Example conformance: " ex-pass "/" ex-total " pass")))
-        (when (pos? cn-total)
-          (println (str "  Connection compatibility: " cn-pass "/" cn-total " pass")))
-        (doseq [r ex-results :when (= :fail (:status r))]
-          (println (str "  FAIL " (:id r) ":"))
-          (doseq [f (:results r) :when (= :fail (:status f))]
-            (println (str "    " (:case f) " - " (:failure f)))))
-        (doseq [r cn-results :when (= :fail (:status r))]
-          (println (str "  FAIL connections in " (:id r) ":"))
-          (doseq [f (:results r) :when (= :fail (:status f))]
-            (println (str "    " (:from f) " -> " (:to f) " - " (:failure f)))))
-        (when-not all-pass (System/exit 1))))))
+(defn cmd-validate [& [path]]
+  (let [spec-path (or path "nil/root.clj")]
+    (when-not (.exists (io/file spec-path))
+      (println (str "No spec file at " spec-path
+                    ". Run 'nilify init' first, or pass a path."))
+      (System/exit 1))
+    (let [tree (try
+                 (load-tree spec-path)
+                 (catch Exception e
+                   (println (str "Could not evaluate " spec-path ": " (ex-message e)))
+                   (System/exit 1)))
+          {:keys [structure references schemas]} (validate-all tree)]
+      (println (str "Validation results (" spec-path "):"))
+      (if structure
+        (do (println "  Structure: FAIL")
+            (println (str "    " (pr-str structure)))
+            (System/exit 1))
+        (do
+          (println "  Structure: ok")
+          (println (str "  References: " (count references) " problem(s)"))
+          (println (str "  Schemas: " (count schemas) " problem(s)"))
+          (doseq [p (concat references schemas)] (println (str "  - " p)))
+          (when (or (seq references) (seq schemas)) (System/exit 1)))))))
 
 (defn cmd-update []
   (println "Checking for updates...")
@@ -495,7 +369,7 @@
   (let [cmd (first args)]
     (case cmd
       "init"     (cmd-init)
-      "validate" (cmd-validate)
+      "validate" (apply cmd-validate (rest args))
       "spec"     (cmd-spec)
       "update"   (cmd-update)
       "version"  (cmd-version)
