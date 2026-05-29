@@ -202,12 +202,18 @@
     (io/file ".claude" "skills" "nilify")
     (io/file ".claude" "skills" (str "nilify-" skill-name))))
 
+(def root-template
+  "(ns my-project\n  (:require [nilify.core :as nilify]))\n\n(nilify/root\n [[:system\n   {:id :sys/example\n    :tech \"your stack here\"\n    :desc (nilify/prompt \"What this system does.\")}\n   [:layer\n    [:feature\n     {:id :feat/example\n      :desc (nilify/prompt \"What this feature does.\")}]]]])\n")
+
 (defn cmd-init []
   (println "Initializing nilify project...")
-  (let [nil-dir (io/file "nil")]
-    (.mkdirs (io/file nil-dir "features"))
-    (.mkdirs (io/file nil-dir "systems"))
-    (println "  Created nil/features/ and nil/systems/"))
+  (let [nil-dir (io/file "nil")
+        root-file (io/file nil-dir "root.clj")]
+    (.mkdirs nil-dir)
+    (if (.exists root-file)
+      (println "  nil/root.clj already exists, leaving it untouched")
+      (do (spit root-file root-template)
+          (println "  Created nil/root.clj"))))
   (let [branch "main"]
     (doseq [skill-name skills]
       (let [url (str raw-url "/" branch "/skills/nilify/" skill-name "/SKILL.md")

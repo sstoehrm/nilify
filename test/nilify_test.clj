@@ -188,3 +188,11 @@
   (let [{:keys [exit out]} (run-validate *test-dir*)]
     (is (= 1 exit))
     (is (clojure.string/includes? out "unknown system"))))
+
+;; ---- init starter ----
+
+(deftest init-starter-template-validates
+  (testing "the embedded starter template is a structurally valid tree"
+    (let [path (str *test-dir* "/starter.clj")]
+      (spit path cli/root-template)
+      (is (nil? (cli/check-structure (cli/load-tree path)))))))
