@@ -248,7 +248,7 @@
 
 ;; ---- Route schema well-formedness (level 3) ----
 
-(defn- empty-payload? [s] (or (nil? s) (= s [])))
+(defn- empty-payload? [s] (or (nil? s) (and (vector? s) (empty? s))))
 
 (defn check-schemas
   "Return problems for provider route :input/:output that are not valid,
@@ -266,7 +266,7 @@
         (catch Exception e
           (swap! problems conj
                  (str (:id (props sub)) " route " (pr-str route) " " k
-                      " is not a valid schema: " (ex-message e))))))
+                      " is not a valid schema: " (or (ex-message e) "(no message)"))))))
     @problems))
 
 ;; ---- Core helpers ----

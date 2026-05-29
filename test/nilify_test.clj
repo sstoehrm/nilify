@@ -144,4 +144,5 @@
             [:subsystem {:id :sub/m
                          :provides {["GET" []] {:interface :iface/x :input [:nope] :output []}}}
              [:layer [:feature {:id :feat/b}]]]]]]
-    (is (seq (cli/check-schemas t)))))
+    (is (seq (cli/check-schemas t)))
+    (is (some #(clojure.string/includes? % "sub/m") (cli/check-schemas t)))))
