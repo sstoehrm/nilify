@@ -246,6 +246,29 @@
       (add! (str "duplicate id " id)))
     @problems))
 
+;; ---- Route schema well-formedness (level 3) ----
+
+(defn- empty-payload? [s] (or (nil? s) (= s [])))
+
+(defn check-schemas
+  "Return problems for provider route :input/:output that are not valid,
+   generatable Malli schemas. [] and nil mean empty payload and are skipped."
+  [tree]
+  (let [problems (atom [])]
+    (doseq [sys tree
+            sub (system-subsystems sys)
+            [route entry] (:provides (props sub))
+            k [:input :output]
+            :let [s (get entry k)]
+            :when (not (empty-payload? s))]
+      (try
+        (mg/generate s)
+        (catch Exception e
+          (swap! problems conj
+                 (str (:id (props sub)) " route " (pr-str route) " " k
+                      " is not a valid schema: " (ex-message e))))))
+    @problems))
+
 ;; ---- Core helpers ----
 
 (defn load-tree

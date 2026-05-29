@@ -126,3 +126,22 @@
   (let [t [[:system {:id :sys/a} [:layer [:feature {:id :feat/dup}]]]
            [:system {:id :sys/b} [:layer [:feature {:id :feat/dup}]]]]]
     (is (some #(clojure.string/includes? % "duplicate id") (cli/check-references t)))))
+
+;; ---- Route schema well-formedness (level 3) ----
+
+(deftest schemas-pass-on-valid-routes
+  (is (empty? (cli/check-schemas todo-tree))))
+
+(deftest empty-payload-is-allowed
+  (let [t [[:system {:id :sys/b :provides [:iface/x]}
+            [:subsystem {:id :sub/m
+                         :provides {["POST" []] {:interface :iface/x :input [] :output nil}}}
+             [:layer [:feature {:id :feat/b}]]]]]]
+    (is (empty? (cli/check-schemas t)))))
+
+(deftest bogus-route-schema-fails
+  (let [t [[:system {:id :sys/b :provides [:iface/x]}
+            [:subsystem {:id :sub/m
+                         :provides {["GET" []] {:interface :iface/x :input [:nope] :output []}}}
+             [:layer [:feature {:id :feat/b}]]]]]]
+    (is (seq (cli/check-schemas t)))))
