@@ -203,7 +203,19 @@
     (io/file ".claude" "skills" (str "nilify-" skill-name))))
 
 (def root-template
-  "(ns my-project\n  (:require [nilify.core :as nilify]))\n\n(nilify/root\n [[:system\n   {:id :sys/example\n    :tech \"your stack here\"\n    :desc (nilify/prompt \"What this system does.\")}\n   [:layer\n    [:feature\n     {:id :feat/example\n      :desc (nilify/prompt \"What this feature does.\")}]]]])\n")
+  "(ns my-project
+  (:require [nilify.core :as nilify]))
+
+(nilify/root
+ [[:system
+   {:id :sys/example
+    :tech \"your stack here\"
+    :desc (nilify/prompt \"What this system does.\")}
+   [:layer
+    [:feature
+     {:id :feat/example
+      :desc (nilify/prompt \"What this feature does.\")}]]]])
+")
 
 (defn cmd-init []
   (println "Initializing nilify project...")

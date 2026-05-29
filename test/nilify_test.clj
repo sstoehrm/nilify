@@ -193,6 +193,6 @@
 
 (deftest init-starter-template-validates
   (testing "the embedded starter template is a structurally valid tree"
-    (let [path (str *test-dir* "/starter.clj")]
+    (let [path (str *test-dir* "/nil/root.clj")]
       (spit path cli/root-template)
       (is (nil? (cli/check-structure (cli/load-tree path)))))))
