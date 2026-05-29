@@ -40,6 +40,8 @@ For a complete reference of every field with documentation, run `nilify spec`.
 
 ## Quick example
 
+This shows two connected systems with a subsystem; see [`examples/easy-calc.clj`](examples/easy-calc.clj) for a simpler single-system starting point.
+
 ```clojure
 (ns todo
   (:require [nilify.core :as nilify]))
@@ -119,7 +121,7 @@ nilify defines systems as a hierarchical tree:
 
 ```
 root
-  system (:tech, :provides, :connects-to)
+  system (:tech, :desc, :provides, :connects-to)
     subsystem (:uses, :provides)        ; optional; groups layers
       layer (ordered top-first)
         feature (:desc, :internals)
@@ -128,7 +130,7 @@ root
 - **root** -- one per project; the file's last form, `(nilify/root [...])`
 - **system** -- deployable unit. Advertises interfaces by name in `:provides`; consumes them via `:connects-to`. A system's children are all layers OR all subsystems
 - **subsystem** -- groups layers and owns the *typed* interface definitions (`:provides`); declares cross-subsystem use via `:uses`
-- **layer** -- ordered top-first: the first layer is topmost/usable, later layers are lower/foundational; only the top layer is usable by consumers
+- **layer** -- ordered top-first: the first layer is topmost/usable, later layers are lower/foundational; lower layers are private to the subsystem
 - **feature** -- leaf node; the unit of generation
 
 ### Naming conventions
@@ -143,7 +145,7 @@ root
 
 ### Interfaces
 
-Systems expose interfaces via `:provides` -- typed routes/operations grouped under an `:interface` name. Consumers declare `:connects-to` with `[system interface]` pairs. The provider owns the contract; the consumer just declares it connects.
+Systems advertise which interfaces they expose via `:provides` -- a list of `:iface/...` names. The *typed* route/operation definitions live on a `:subsystem`, whose `:provides` map groups routes under an `:interface` key. Consumers declare `:connects-to` with `[system interface]` pairs -- the provider owns the contract; the consumer just declares the connection.
 
 ### Shared schemas
 
@@ -152,6 +154,7 @@ Malli schemas defined as Clojure vars and referenced across the tree:
 ```clojure
 (def spec-todo
   [:map
+   {:registry {:domain-model/id :int}}
    :domain-model/id
    [:name :string]
    [:priority [:enum :high :medium :low]]
