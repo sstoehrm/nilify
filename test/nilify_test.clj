@@ -204,3 +204,14 @@
   (is (clojure.string/includes? cli/spec-reference "nilify/root"))
   (is (not (clojure.string/includes? cli/spec-reference ":components")))
   (is (not (clojure.string/includes? cli/spec-reference ":cases"))))
+
+;; ---- shipped examples ----
+
+(deftest shipped-examples-validate
+  (doseq [ex ["examples/easy-calc.clj" "examples/todo.clj"]]
+    (testing ex
+      (let [{:keys [structure references schemas]}
+            (cli/validate-all (cli/load-tree ex))]
+        (is (nil? structure) (str ex " structure"))
+        (is (empty? references) (str ex " references: " references))
+        (is (empty? schemas) (str ex " schemas: " schemas))))))
