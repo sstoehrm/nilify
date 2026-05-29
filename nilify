@@ -223,27 +223,27 @@
 
 (defn cmd-validate [& [path]]
   (let [spec-path (or path "nil/root.clj")]
-    (when-not (.exists (io/file spec-path))
-      (println (str "No spec file at " spec-path
-                    ". Run 'nilify init' first, or pass a path."))
-      (System/exit 1))
-    (let [tree (try
-                 (load-tree spec-path)
-                 (catch Exception e
-                   (println (str "Could not evaluate " spec-path ": " (ex-message e)))
-                   (System/exit 1)))
-          {:keys [structure references schemas]} (validate-all tree)]
-      (println (str "Validation results (" spec-path "):"))
-      (if structure
-        (do (println "  Structure: FAIL")
-            (println (str "    " (pr-str structure)))
-            (System/exit 1))
-        (do
-          (println "  Structure: ok")
-          (println (str "  References: " (count references) " problem(s)"))
-          (println (str "  Schemas: " (count schemas) " problem(s)"))
-          (doseq [p (concat references schemas)] (println (str "  - " p)))
-          (when (or (seq references) (seq schemas)) (System/exit 1)))))))
+    (if-not (.exists (io/file spec-path))
+      (do (println (str "No spec file at " spec-path
+                        ". Run 'nilify init' first, or pass a path."))
+          (System/exit 1))
+      (let [tree (try
+                   (load-tree spec-path)
+                   (catch Exception e
+                     (println (str "Could not evaluate " spec-path ": " (ex-message e)))
+                     (System/exit 1)))
+            {:keys [structure references schemas]} (validate-all tree)]
+        (println (str "Validation results (" spec-path "):"))
+        (if structure
+          (do (println "  Structure: FAIL")
+              (println (str "    " (pr-str structure)))
+              (System/exit 1))
+          (do
+            (println "  Structure: ok")
+            (println (str "  References: " (count references) " problem(s)"))
+            (println (str "  Schemas: " (count schemas) " problem(s)"))
+            (doseq [p (concat references schemas)] (println (str "  - " p)))
+            (when (or (seq references) (seq schemas)) (System/exit 1))))))))
 
 (defn cmd-update []
   (println "Checking for updates...")

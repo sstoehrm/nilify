@@ -18,8 +18,7 @@
 
 (use-fixtures :each (fn [f]
                       (delete-tree *test-dir*)
-                      (.mkdirs (io/file *test-dir* "nil" "features"))
-                      (.mkdirs (io/file *test-dir* "nil" "systems"))
+                      (.mkdirs (io/file *test-dir* "nil"))
                       (f)))
 
 ;; ---- nilify.core runtime ----
