@@ -286,8 +286,9 @@
 ;
 ; A project's spec is ONE Clojure file (default nil/root.clj) that, when
 ; evaluated, returns a tree via (nilify/root [...]). `nilify validate`
-; evaluates it with sci -- so (nilify/prompt ...) and shared `def` schema
-; vars work. The last form must be the (nilify/root ...) call.
+; evaluates it as code with Babashka's bundled sci (not sandboxed) -- so
+; (nilify/prompt ...) and shared `def` schema vars work. The last form
+; must be the (nilify/root ...) call.
 
 (ns my-project
   (:require [nilify.core :as nilify]))
@@ -304,9 +305,9 @@
     :connects-to #{[:sys/other :iface/x]}}   ; optional, interfaces consumed
 
    ;; A system's children are EITHER layers (simple) OR subsystems (composed),
-   ;; never mixed. Layers/subsystems are ordered TOP-FIRST: the first layer is
-   ;; the topmost/usable one; later layers are lower and more foundational;
-   ;; dependencies flow downward.
+   ;; never mixed. Layers/subsystems are ordered TOP-FIRST (by convention, not
+   ;; enforced): the first layer is the topmost/usable one; later layers are
+   ;; lower and more foundational; dependencies flow downward.
 
    [:subsystem
     {:id       :sub/main                     ; required, :sub/<name>
