@@ -3,6 +3,19 @@
 (require '[babashka.deps :as deps])
 (deps/add-deps '{:deps {metosin/malli {:mvn/version "0.20.1"}}})
 
+(ns nilify.core
+  (:require [clojure.string :as str]))
+
+(defn prompt
+  "Join description fragments into one string."
+  [& parts]
+  (str/join " " parts))
+
+(defn root
+  "Spec entry point: return the vector of system nodes as the tree."
+  [systems]
+  (vec systems))
+
 (ns nilify.cli
   (:require [babashka.http-client :as http]
             [clojure.edn :as edn]
@@ -124,6 +137,11 @@
      :results results}))
 
 ;; ---- Core helpers ----
+
+(defn load-tree
+  "Evaluate a spec file with sci; its last form (nilify/root …) returns the tree."
+  [path]
+  (load-string (slurp path)))
 
 (defn- load-spec [path]
   (validate-spec! (edn/read-string (slurp path))))
