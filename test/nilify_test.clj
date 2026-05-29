@@ -196,3 +196,11 @@
     (let [path (str *test-dir* "/nil/root.clj")]
       (spit path cli/root-template)
       (is (nil? (cli/check-structure (cli/load-tree path)))))))
+
+;; ---- spec reference ----
+
+(deftest spec-reference-describes-the-tree
+  (is (clojure.string/includes? cli/spec-reference ":subsystem"))
+  (is (clojure.string/includes? cli/spec-reference "nilify/root"))
+  (is (not (clojure.string/includes? cli/spec-reference ":components")))
+  (is (not (clojure.string/includes? cli/spec-reference ":cases"))))

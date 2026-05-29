@@ -25,7 +25,7 @@
             [malli.generator :as mg]
             [cheshire.core :as json]))
 
-(def version "0.1.0")
+(def version "0.2.0")
 (def repo "sstoehrm/nilify")
 (def raw-url (str "https://raw.githubusercontent.com/" repo))
 
@@ -284,87 +284,65 @@
 (def spec-reference
 "; nilify spec reference -- every field documented in one place.
 ;
-; A project's specs live in nil/. There are two spec formats:
-;   1. Flat (EDN files in nil/features/ and nil/systems/) -- validated by `nilify validate`
-;   2. Tree  (Clojure script using nilify.core) -- composes specs as data
-
-;; ---------------------------------------------------------------------------
-;; 1. Flat feature spec -- nil/features/<id>.clj
-;; ---------------------------------------------------------------------------
-
-{:id      :feat/compute                  ; required: unique keyword
- :desc    \"Evaluate Clojure expressions\" ; optional: natural-language purpose
- :tech    \"babashka\"                    ; optional: free-form tech hint
- :deps    [:feat/translate]              ; optional: feature ids this depends on
- :cases                                  ; optional: typed cases
- {:eval
-  {:input   [:map [:expr :string]]       ; required: Malli schema for input
-   :output  [:map [:result :double]]     ; required: Malli schema for output
-   :desc    \"Parse and evaluate\"        ; optional: case-level description
-   :examples                             ; optional: input/output pairs
-   [{:in {:expr \"(+ 1 2)\"} :out {:result 3.0}}
-    {:in {:expr \"(* 2 4)\"} :out {:result 8.0}}]}}}
-
-;; ---------------------------------------------------------------------------
-;; 2. Flat system spec -- nil/systems/<id>.clj
-;; ---------------------------------------------------------------------------
-
-{:id          :sys/calculator            ; required: unique keyword
- :desc        \"NL calculator\"           ; optional: description
- :components                             ; required: map of name -> {:feature :lang}
- {:translate {:feature :feat/translate :lang :python}
-  :compute   {:feature :feat/compute   :lang :babashka}}
- :connections                            ; optional: data flow between components
- [[[:translate :translate :output]       ; from: [component case :input/:output]
-   [:compute   :eval      :input]]]}     ; to:   [component case :input/:output]
-
-;; ---------------------------------------------------------------------------
-;; 3. Tree form -- composes specs as Clojure data
-;; ---------------------------------------------------------------------------
+; A project's spec is ONE Clojure file (default nil/root.clj) that, when
+; evaluated, returns a tree via (nilify/root [...]). `nilify validate`
+; evaluates it with sci -- so (nilify/prompt ...) and shared `def` schema
+; vars work. The last form must be the (nilify/root ...) call.
 
 (ns my-project
   (:require [nilify.core :as nilify]))
 
-(def spec-query  [:map [:query :string]])   ; shared schemas as Clojure vars
+;; Shared Malli schemas as ordinary vars, referenced anywhere in the tree:
 (def spec-result [:map [:result :double]])
 
-(def root (nilify/root
-           [[:system                              ; node type
-             {:id          :sys/backend           ; required
-              :tech        \"http-server babashka\" ; optional: free-form tech
-              :desc        \"REST API\"             ; optional
-              :provides                           ; optional: exposed interfaces
-              {[\"HTTP GET\" [\"/\"]]
-               {:interface :iface/api             ; group routes by interface name
-                :input     []
-                :output    [:vector spec-result]}}
-              :connects-to                        ; optional: consumed interfaces
-              #{[:sys/external :iface/auth]}}
+(nilify/root
+ [[:system                                  ; one or more systems
+   {:id          :sys/backend               ; required, :sys/<name>
+    :tech        \"http-server babashka\"     ; optional, free-form
+    :desc        (nilify/prompt \"...\" \"...\")    ; optional, prompt joins with spaces
+    :provides    [:iface/backend-api]        ; optional, interface NAMES advertised
+    :connects-to #{[:sys/other :iface/x]}}   ; optional, interfaces consumed
 
-             [:layer                              ; layers ordered bottom-to-top
-              [:feature                           ; foundational features go first
-               {:id        :feat/domain-model
-                :desc      \"Core domain types\"
-                :internals {:domain-model spec-result}}]]
+   ;; A system's children are EITHER layers (simple) OR subsystems (composed),
+   ;; never mixed. Layers/subsystems are ordered TOP-FIRST: the first layer is
+   ;; the topmost/usable one; later layers are lower and more foundational;
+   ;; dependencies flow downward.
 
-             [:layer                              ; upper layer depends on lower
-              [:feature
-               {:id        :feat/api
-                :tech      \"compojure\"            ; per-feature tech override
-                :desc      (nilify/prompt
-                            \"Provides :iface/api\"
-                            \"Routes documented in :provides above.\")}]]]]))
+   [:subsystem
+    {:id       :sub/main                     ; required, :sub/<name>
+     :uses     [:sub/other]                  ; optional, sibling subsystems used
+     :provides                               ; optional, TYPED interface definitions
+     {[\"HTTP GET\" [\"/\"]]                     ; route key: free-form (method + path)
+      {:interface :iface/backend-api         ; must be advertised in system :provides
+       :input  []                            ; Malli schema, or [] / nil for empty
+       :output [:vector spec-result]}}}      ; Malli schema
+
+    [:layer                                  ; topmost layer (usable)
+     [:feature
+      {:id        :feat/api                  ; required, :feat/<name>
+       :tech      \"compojure\"                ; optional per-feature tech
+       :desc      (nilify/prompt \"...\")}]]
+    [:layer                                  ; lower layer (private)
+     [:feature
+      {:id        :feat/domain-model
+       :internals {:domain spec-result}}]]]]]) ; optional, free-form domain knowledge
 
 ;; ---------------------------------------------------------------------------
-;; Naming conventions (by convention, not enforced)
+;; Naming conventions (by convention)
 ;; ---------------------------------------------------------------------------
+;; :sys/<name>   system ids        :sub/<name>    subsystem ids
+;; :feat/<name>  feature ids       :iface/<name>  interface names
+;; :<feature>/<field>  schema fields owned by a feature
 
-;; :sys/<name>            system ids
-;; :feat/<name>           feature ids
-;; :iface/<name>          interface names (for :provides / :connects-to)
-;; :<feature>/<field>     schema fields owned by a feature (e.g. :domain-model/id)
+;; ---------------------------------------------------------------------------
+;; Validation (nilify validate) -- three schema-level passes, no project code run
+;; ---------------------------------------------------------------------------
+;; 1. Structure   -- the tree conforms to the node schemas above
+;; 2. References  -- connects-to resolves to a provided interface; every advertised
+;;                   interface is defined by a subsystem route (and vice versa);
+;;                   :uses resolves to a sibling subsystem; ids are unique
+;; 3. Schemas     -- each route :input/:output is a valid, generatable Malli schema
 ")
-
 (defn cmd-spec []
   (println spec-reference))
 
