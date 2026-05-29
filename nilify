@@ -139,7 +139,7 @@
 ;; ---- Core helpers ----
 
 (defn load-tree
-  "Evaluate a spec file with sci; its last form (nilify/root …) returns the tree."
+  "Evaluate a spec file in the babashka runtime (not sandboxed); its last form (nilify/root …) returns the tree."
   [path]
   (load-string (slurp path)))
 

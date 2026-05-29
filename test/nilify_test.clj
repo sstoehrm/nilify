@@ -34,7 +34,7 @@
 ;; ---- load-tree ----
 
 (deftest load-tree-evaluates-and-returns-tree
-  (testing "evaluating a spec file returns the tree; prompt + shared var resolve"
+  (testing "evaluating a spec file returns the tree (nilify.core must already be loaded in the runtime); prompt + shared var resolve"
     (let [path (str *test-dir* "/spec.clj")]
       (spit path
             (str "(ns demo (:require [nilify.core :as nilify]))\n"
