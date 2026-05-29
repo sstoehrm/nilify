@@ -84,6 +84,55 @@
                     {:type :nilify/invalid-system :system system
                      :errors (me/humanize (m/explain SystemSpec system))}))))
 
+;; ---- Tree spec schemas ----
+
+(def FeatureProps
+  [:map
+   [:id :keyword]
+   [:tech      {:optional true} :string]
+   [:desc      {:optional true} :string]
+   [:internals {:optional true} [:map-of :any :any]]])
+
+(def Feature [:catn [:tag [:enum :feature]] [:props FeatureProps]])
+(def Layer   [:catn [:tag [:enum :layer]] [:features [:+ [:schema Feature]]]])
+
+(def ProvidesEntry
+  [:map
+   [:interface :keyword]
+   [:input  :any]    ; a Malli schema, or [] / nil for empty payload
+   [:output :any]])
+
+(def SubProps
+  [:map
+   [:id :keyword]
+   [:uses     {:optional true} [:vector :keyword]]
+   [:provides {:optional true} [:map-of :any ProvidesEntry]]])
+
+(def Subsystem
+  [:catn [:tag [:enum :subsystem]] [:props SubProps]
+   [:layers [:+ [:schema Layer]]]])
+
+(def SysProps
+  [:map
+   [:id :keyword]
+   [:tech        {:optional true} :string]
+   [:desc        {:optional true} :string]
+   [:provides    {:optional true} [:vector :keyword]]
+   [:connects-to {:optional true} [:set [:tuple :keyword :keyword]]]])
+
+(def System
+  [:catn [:tag [:enum :system]] [:props SysProps]
+   ;; a system's children are all layers OR all subsystems, never mixed
+   [:body [:alt [:+ [:schema Layer]] [:+ [:schema Subsystem]]]]])
+
+(def Root [:+ [:schema System]])
+
+(defn check-structure
+  "nil if the tree is structurally valid, else humanized Malli errors."
+  [tree]
+  (when-not (m/validate Root tree)
+    (me/humanize (m/explain Root tree))))
+
 ;; ---- Validation (embedded from src/nilify/validate.clj) ----
 
 (defn- check-one-example [case-name case-spec example]
