@@ -185,6 +185,67 @@
      :status (if (every? #(= :pass (:status %)) results) :pass :fail)
      :results results}))
 
+;; ---- Tree-walk helpers ----
+
+(defn- props [node] (second node))
+(defn- node-tag [node] (first node))
+(defn- system-subsystems [sys] (filter #(= :subsystem (node-tag %)) (drop 2 sys)))
+(defn- system-layers [sys] (filter #(= :layer (node-tag %)) (drop 2 sys)))
+(defn- subsystem-layers [sub] (drop 2 sub))
+(defn- layer-features [layer] (rest layer))
+
+(defn- all-layers [sys]
+  (concat (system-layers sys)
+          (mapcat subsystem-layers (system-subsystems sys))))
+
+(defn- all-features [tree]
+  (mapcat (fn [sys] (mapcat layer-features (all-layers sys))) tree))
+
+(defn- all-ids [tree]
+  (concat (map #(:id (props %)) tree)
+          (map #(:id (props %)) (mapcat system-subsystems tree))
+          (map #(:id (props %)) (all-features tree))))
+
+;; ---- Reference & visibility integrity (level 2) ----
+
+(defn check-references
+  "Return a vector of human-readable reference/integrity problems (empty if clean)."
+  [tree]
+  (let [sys-by-id (into {} (map (juxt #(:id (props %)) identity) tree))
+        problems  (atom [])
+        add! (fn [m] (swap! problems conj m))]
+    ;; connects-to integrity
+    (doseq [sys tree
+            [tsys tiface] (:connects-to (props sys))]
+      (let [target (sys-by-id tsys)]
+        (cond
+          (nil? target)
+          (add! (str (:id (props sys)) " connects-to unknown system " tsys))
+          (not (some #{tiface} (:provides (props target))))
+          (add! (str (:id (props sys)) " connects-to " tsys " " tiface
+                     ", but that system does not provide it")))))
+    ;; provides declaration <-> definition
+    (doseq [sys tree]
+      (let [declared (set (:provides (props sys)))
+            defined  (set (mapcat (fn [sub] (map :interface (vals (:provides (props sub)))))
+                                  (system-subsystems sys)))]
+        (doseq [iface declared :when (not (defined iface))]
+          (add! (str (:id (props sys)) " provides " iface
+                     ", but no subsystem defines routes for it")))
+        (doseq [iface defined :when (not (declared iface))]
+          (add! (str (:id (props sys)) " has a route for " iface
+                     ", but does not advertise it in :provides")))))
+    ;; uses integrity
+    (doseq [sys tree]
+      (let [sub-ids (set (map #(:id (props %)) (system-subsystems sys)))]
+        (doseq [sub (system-subsystems sys)
+                used (:uses (props sub)) :when (not (sub-ids used))]
+          (add! (str (:id (props sub)) " uses unknown subsystem " used)))))
+    ;; unique ids
+    (doseq [[id n] (frequencies (all-ids tree)) :when (> n 1)]
+      (add! (str "duplicate id " id)))
+    @problems))
+
 ;; ---- Core helpers ----
 
 (defn load-tree

@@ -83,3 +83,46 @@
 (deftest structure-rejects-bad-tag-and-empty-layer
   (is (some? (cli/check-structure [[:system {:id :sys/x} [:layer [:nope {:id :feat/a}]]]])))
   (is (some? (cli/check-structure [[:system {:id :sys/x} [:layer]]]))))
+
+;; ---- Reference & visibility integrity ----
+
+(deftest references-pass-on-valid-trees
+  (is (empty? (cli/check-references calc-tree)))
+  (is (empty? (cli/check-references todo-tree))))
+
+(deftest connects-to-unknown-system-fails
+  (let [t [[:system {:id :sys/a :connects-to #{[:sys/ghost :iface/x]}}
+            [:layer [:feature {:id :feat/a}]]]]]
+    (is (some #(clojure.string/includes? % "unknown system") (cli/check-references t)))))
+
+(deftest connects-to-undeclared-interface-fails
+  (let [t [[:system {:id :sys/a :connects-to #{[:sys/b :iface/missing]}}
+            [:layer [:feature {:id :feat/a}]]]
+           [:system {:id :sys/b :provides [:iface/real]}
+            [:subsystem {:id :sub/m
+                         :provides {["GET" []] {:interface :iface/real :input [] :output []}}}
+             [:layer [:feature {:id :feat/b}]]]]]]
+    (is (some #(clojure.string/includes? % "does not provide") (cli/check-references t)))))
+
+(deftest provides-without-definition-fails
+  (let [t [[:system {:id :sys/b :provides [:iface/real]}
+            [:subsystem {:id :sub/m} [:layer [:feature {:id :feat/b}]]]]]]
+    (is (some #(clojure.string/includes? % "no subsystem defines") (cli/check-references t)))))
+
+(deftest route-without-advertisement-fails
+  (let [t [[:system {:id :sys/b}
+            [:subsystem {:id :sub/m
+                         :provides {["GET" []] {:interface :iface/secret :input [] :output []}}}
+             [:layer [:feature {:id :feat/b}]]]]]]
+    (is (some #(clojure.string/includes? % "does not advertise") (cli/check-references t)))))
+
+(deftest uses-unknown-subsystem-fails
+  (let [t [[:system {:id :sys/b}
+            [:subsystem {:id :sub/a :uses [:sub/ghost]} [:layer [:feature {:id :feat/a}]]]
+            [:subsystem {:id :sub/b} [:layer [:feature {:id :feat/b}]]]]]]
+    (is (some #(clojure.string/includes? % "uses unknown subsystem") (cli/check-references t)))))
+
+(deftest duplicate-ids-fail
+  (let [t [[:system {:id :sys/a} [:layer [:feature {:id :feat/dup}]]]
+           [:system {:id :sys/b} [:layer [:feature {:id :feat/dup}]]]]]
+    (is (some #(clojure.string/includes? % "duplicate id") (cli/check-references t)))))
