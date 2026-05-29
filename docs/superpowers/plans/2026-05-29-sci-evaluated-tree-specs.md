@@ -109,9 +109,9 @@ In `nilify`, immediately after the `(deps/add-deps …)` line and before `(ns ni
   (vec systems))
 ```
 
-- [ ] **Step 4: Trim the `nilify.cli` requires and add `load-tree`**
+- [ ] **Step 4: Add `load-tree`**
 
-In the `(ns nilify.cli …)` form, remove `[clojure.edn :as edn]` (no longer used). Then, in the "Core helpers" area (where `load-spec` currently lives), add:
+In the "Core helpers" area (next to the existing `load-spec`), add `load-tree`. Do **not** remove anything yet — `load-spec`/`load-system`/`clojure.edn` stay until Task 5 (the file must keep loading at every step).
 
 ```clojure
 (defn load-tree
@@ -188,9 +188,9 @@ Append to `test/nilify_test.clj` (above any integration section):
 Run: `bb test/runner.clj`
 Expected: FAIL — `cli/check-structure` undefined.
 
-- [ ] **Step 3: Replace the flat schemas with the tree schema + `check-structure`**
+- [ ] **Step 3: Add the tree schema + `check-structure` (additive)**
 
-In `nilify`, delete the entire block from `;; ---- Spec schemas (embedded from src/nilify/spec.clj) ----` through the end of `validate-system!` (the `Case`, `FeatureSpec`, `Component`, `Endpoint`, `Connection`, `SystemSpec`, `validate-spec!`, `validate-system!` defs). Replace with:
+In `nilify`, **add** the following as a new section immediately *after* the existing flat `validate-system!`. Do **not** delete the flat schemas yet — the entire flat cluster is removed atomically in Task 5, so the file keeps loading at every step. (New names don't collide with flat names.)
 
 ```clojure
 ;; ---- Tree spec schemas ----
@@ -317,9 +317,9 @@ Append to `test/nilify_test.clj`:
 Run: `bb test/runner.clj`
 Expected: FAIL — `cli/check-references` undefined.
 
-- [ ] **Step 3: Replace the example/connection checks with helpers + `check-references`**
+- [ ] **Step 3: Add tree-walk helpers + `check-references` (additive)**
 
-In `nilify`, delete the block from `;; ---- Validation (embedded from src/nilify/validate.clj) ----` through the end of `check-connections` (i.e. `check-one-example`, `check-examples`, `sample-count`, `check-one-connection`, `check-connections`). Replace with:
+In `nilify`, **add** the following as a new section *after* the existing flat `check-connections`. Do **not** delete the flat validation functions yet — they are removed atomically in Task 5. (New names don't collide with flat names.)
 
 ```clojure
 ;; ---- Tree-walk helpers ----
@@ -550,9 +550,14 @@ Add `babashka.process` to the test ns require:
 Run: `bb test/runner.clj`
 Expected: FAIL — `cli/validate-all` has the wrong arity / `cmd-validate` still scans dirs.
 
-- [ ] **Step 3: Replace loaders + `validate-all`**
+- [ ] **Step 3: Remove the flat cluster atomically + add new `validate-all`**
 
-In `nilify`, delete `load-spec`, `load-system`, `load-dir`, and the old `validate-all` (keep the `load-tree` from Task 1). Add a new `validate-all` in the same area:
+Now that all tree functions exist and nothing new references the flat code, remove the **entire** flat cluster in one consistent edit (so the file never has dangling references). Delete:
+- the flat schema block: `Case`, `FeatureSpec`, `Component`, `Endpoint`, `Connection`, `SystemSpec`, `validate-spec!`, `validate-system!`
+- the flat validation block: `check-one-example`, `check-examples`, `sample-count`, `check-one-connection`, `check-connections`
+- the flat loaders: `load-spec`, `load-system`, `load-dir`, and the **old** `validate-all`
+
+Keep `load-tree`. Also remove `[clojure.edn :as edn]` from the `nilify.cli` requires (only the flat loaders used it). Then add the new `validate-all`:
 
 ```clojure
 (defn validate-all
@@ -565,6 +570,8 @@ In `nilify`, delete `load-spec`, `load-system`, `load-dir`, and the old `validat
        :references (check-references tree)
        :schemas    (check-schemas tree)})))
 ```
+
+After this edit, run `bb -e '(load-file "nilify")'` (or the tests) to confirm the file still loads with no unresolved symbols.
 
 - [ ] **Step 4: Rewrite `cmd-validate` and the dispatch**
 
