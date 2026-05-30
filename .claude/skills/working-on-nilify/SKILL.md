@@ -69,8 +69,8 @@ Single Babashka file. Self-contained -- declares its Malli dep inline via `babas
 
 | Command | What it does |
 |---------|--------------|
-| `init` | Creates `nil/features/` and `nil/systems/`, downloads skills from GitHub main into `.claude/skills/nilify[-<sub>]/` |
-| `validate` | Loads specs from `nil/features/` and `nil/systems/`, runs three validation levels |
+| `init` | Creates `nil/root.clj` stub, downloads skills from GitHub main into `.claude/skills/nilify[-<sub>]/` |
+| `validate` | Loads and evaluates `nil/root.clj` via sci, runs three validation passes (Structure / References / Schemas) |
 | `spec` | Prints the complete annotated spec reference |
 | `update` | Self-updates from GitHub main |
 | `version` | Show version |
@@ -117,16 +117,14 @@ Skills compose with superpowers and ralph loop. They don't reimplement orchestra
 
 ## Spec language
 
-Two formats coexist:
-
-1. **Flat EDN** -- `nil/features/<id>.clj` and `nil/systems/<id>.clj`. Each file is one spec map. Validated by `nilify validate`.
-2. **Tree (Clojure)** -- composes with `nilify/root`, `nilify/prompt` inside a Clojure script. More expressive, allows shared schemas as Clojure vars. NOTE: the runtime library that exposes `nilify.core` is not yet implemented -- examples currently can't run as-is. Open work.
+A project's spec is a single Clojure file, `nil/root.clj`, whose last form is `(nilify/root [...])`. `nilify validate` evaluates it with babashka's bundled sci (not sandboxed), so `nilify/prompt` and shared `def`'d Malli schema vars work. The `nilify.core` runtime (`prompt`, `root`) is defined in-process by the CLI.
 
 ### Tree node types
 
-- `root` -- one per project, contains systems
-- `system` -- deployable unit with `:tech` (free-form), `:provides`, `:connects-to`
-- `layer` -- ordered bottom-to-top. Dependencies flow downward only.
+- `root` -- one per project, contains systems; the file's last form `(nilify/root [...])`
+- `system` -- deployable unit with `:tech` (free-form), `:provides` (interface-name vector), `:connects-to`. Children are all layers OR all subsystems
+- `subsystem` -- optional grouping with `:uses` and a typed `:provides` (route map); owns the interface definitions
+- `layer` -- ordered top-first; lower layers are private. Dependencies flow downward only.
 - `feature` -- leaf node with `:desc`, `:internals`
 
 ### Naming conventions
@@ -136,11 +134,11 @@ Two formats coexist:
 - `:iface/<name>` -- interface names
 - `:<feature>/<field>` -- schema fields owned by a feature
 
-### Validation levels (all schema-level, no code executed)
+### Validation passes (all schema-level, only the spec file is evaluated)
 
-1. Spec validity (Malli schemas for FeatureSpec/SystemSpec)
-2. Example conformance (each `:in`/`:out` matches its case's `:input`/`:output` schema)
-3. Connection compatibility (samples from output schema validate against input schema via `malli.generator`)
+1. Structure (the tree conforms to the node Malli schemas)
+2. References (`:connects-to` resolves to a provided interface; advertised interfaces are defined by subsystem routes and vice versa; `:uses` resolves to a sibling subsystem; ids are unique)
+3. Schemas (each subsystem route's `:input`/`:output` is a valid, generatable Malli schema via `malli.generator`; `[]`/`nil` = empty payload)
 
 ## Development workflow
 
@@ -184,7 +182,6 @@ Users update via `nilify update`, which pulls the latest from `main` (not the la
 
 ## Open work / known gaps
 
-- **Runtime library** -- `nilify.core` doesn't exist as a requirable namespace. Examples that do `(:require [nilify.core :as nilify])` won't run because the CLI's namespace is `nilify.cli`, not `nilify.core`. Either rename and install the CLI on classpath, or write a small runtime template that `init` deploys.
 - **`nilify diff`** -- skill exists, CLI command doesn't. Would write `.nil/state.edn` after generation, diff against current spec tree.
 - **`nilify generate`** -- skill describes orchestration via superpowers, but there's no CLI command. Generation today is fully driven by the harness reading specs.
 - **Plugin distribution** -- shipping nilify as a Claude Code plugin would give skills the proper `nilify:` namespace prefix and simpler distribution.

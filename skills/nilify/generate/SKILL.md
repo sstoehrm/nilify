@@ -25,7 +25,7 @@ Determine what changed since last generation. Only generate for new or modified 
 
 ### 3. Determine generation order
 
-Respect layer dependencies -- generate bottom-to-top within each system:
+Respect layer dependencies -- generate the foundational (lower) layers first within each system:
 
 ```
 System :sys/backend

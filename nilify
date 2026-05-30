@@ -3,9 +3,21 @@
 (require '[babashka.deps :as deps])
 (deps/add-deps '{:deps {metosin/malli {:mvn/version "0.20.1"}}})
 
+(ns nilify.core
+  (:require [clojure.string :as str]))
+
+(defn prompt
+  "Join description fragments into one string."
+  [& parts]
+  (str/join " " parts))
+
+(defn root
+  "Spec entry point: return the vector of system nodes as the tree."
+  [systems]
+  (vec systems))
+
 (ns nilify.cli
   (:require [babashka.http-client :as http]
-            [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as string]
             [malli.core :as m]
@@ -13,140 +25,159 @@
             [malli.generator :as mg]
             [cheshire.core :as json]))
 
-(def version "0.1.0")
+(def version "0.2.0")
 (def repo "sstoehrm/nilify")
 (def raw-url (str "https://raw.githubusercontent.com/" repo))
 
-;; ---- Spec schemas (embedded from src/nilify/spec.clj) ----
+;; ---- Tree spec schemas ----
 
-(def Case
+(def FeatureProps
   [:map
-   [:input  :any]
-   [:output :any]
-   [:desc     {:optional true} :string]
-   [:examples {:optional true}
-    [:vector [:map [:in :any] [:out :any]]]]])
+   [:id :keyword]
+   [:tech      {:optional true} :string]
+   [:desc      {:optional true} :string]
+   [:internals {:optional true} [:map-of :any :any]]])
 
-(def FeatureSpec
+(def Feature [:catn [:tag [:enum :feature]] [:props FeatureProps]])
+(def Layer   [:catn [:tag [:enum :layer]] [:features [:+ [:schema Feature]]]])
+
+(def ProvidesEntry
   [:map
-   [:id    :keyword]
-   [:tech  {:optional true} :string]
-   [:desc  {:optional true} :string]
-   [:deps  {:optional true} [:vector :keyword]]
-   [:cases {:optional true}
-    [:and
-     [:map-of :keyword Case]
-     [:fn {:error/message "must have at least one case"}
-      (fn [m] (pos? (count m)))]]]])
+   [:interface :keyword]
+   [:input  :any]    ; a Malli schema, or [] / nil for empty payload
+   [:output :any]])
 
-(def Component
+(def SubProps
   [:map
-   [:feature :keyword]
-   [:lang    :keyword]])
+   [:id :keyword]
+   [:uses     {:optional true} [:vector :keyword]]
+   [:provides {:optional true} [:map-of :any ProvidesEntry]]])
 
-(def Endpoint
-  [:tuple :keyword :keyword [:enum :input :output]])
+(def Subsystem
+  [:catn [:tag [:enum :subsystem]] [:props SubProps]
+   [:layers [:+ [:schema Layer]]]])
 
-(def Connection
-  [:tuple Endpoint Endpoint])
-
-(def SystemSpec
+(def SysProps
   [:map
-   [:id          :keyword]
+   [:id :keyword]
+   [:tech        {:optional true} :string]
    [:desc        {:optional true} :string]
-   [:components  [:map-of :keyword Component]]
-   [:connections {:optional true} [:vector Connection]]])
+   [:provides    {:optional true} [:vector :keyword]]
+   [:connects-to {:optional true} [:set [:tuple :keyword :keyword]]]])
 
-(defn validate-spec! [spec]
-  (if (m/validate FeatureSpec spec)
-    spec
-    (throw (ex-info "invalid-spec"
-                    {:type :nilify/invalid-spec :spec spec
-                     :errors (me/humanize (m/explain FeatureSpec spec))}))))
+(def System
+  [:catn [:tag [:enum :system]] [:props SysProps]
+   ;; a system's children are all layers OR all subsystems, never mixed
+   [:body [:alt [:+ [:schema Layer]] [:+ [:schema Subsystem]]]]])
 
-(defn validate-system! [system]
-  (if (m/validate SystemSpec system)
-    system
-    (throw (ex-info "invalid-system"
-                    {:type :nilify/invalid-system :system system
-                     :errors (me/humanize (m/explain SystemSpec system))}))))
+(def Root [:+ [:schema System]])
 
-;; ---- Validation (embedded from src/nilify/validate.clj) ----
+(defn check-structure
+  "nil if the tree is structurally valid, else humanized Malli errors."
+  [tree]
+  (when-not (m/validate Root tree)
+    (me/humanize (m/explain Root tree))))
 
-(defn- check-one-example [case-name case-spec example]
-  (let [{:keys [in out]} example
-        input-ok  (m/validate (:input case-spec) in)
-        output-ok (m/validate (:output case-spec) out)]
-    (cond
-      (not input-ok)  {:case case-name :in in :out out :status :fail :failure :input-mismatch}
-      (not output-ok) {:case case-name :in in :out out :status :fail :failure :output-mismatch}
-      :else           {:case case-name :in in :out out :status :pass})))
+;; ---- Tree-walk helpers ----
 
-(defn check-examples [{:keys [id cases]}]
-  (let [results (vec (for [[case-name case-spec] cases
-                           example (:examples case-spec)]
-                       (check-one-example case-name case-spec example)))]
-    {:id id :check :examples
-     :status (if (every? #(= :pass (:status %)) results) :pass :fail)
-     :results results}))
+(defn- props [node] (second node))
+(defn- node-tag [node] (first node))
+(defn- system-subsystems [sys] (filter #(= :subsystem (node-tag %)) (drop 2 sys)))
+(defn- system-layers [sys] (filter #(= :layer (node-tag %)) (drop 2 sys)))
+(defn- subsystem-layers [sub] (drop 2 sub))
+(defn- layer-features [layer] (rest layer))
 
-(def ^:private sample-count 20)
+(defn- all-layers [sys]
+  (concat (system-layers sys)
+          (mapcat subsystem-layers (system-subsystems sys))))
 
-(defn- check-one-connection [system features [source sink]]
-  (let [src-fid (:feature (get (:components system) (first source)))
-        snk-fid (:feature (get (:components system) (first sink)))
-        src-feat (get features src-fid)
-        snk-feat (get features snk-fid)]
-    (cond
-      (not src-feat) {:from source :to sink :status :fail :failure :missing-feature
-                      :detail (str "feature " src-fid " not found")}
-      (not snk-feat) {:from source :to sink :status :fail :failure :missing-feature
-                      :detail (str "feature " snk-fid " not found")}
-      :else
-      (let [out-schema (:output (get-in src-feat [:cases (second source)]))
-            in-schema  (:input  (get-in snk-feat [:cases (second sink)]))]
-        (try
-          (let [samples  (repeatedly sample-count #(mg/generate out-schema))
-                failures (remove #(m/validate in-schema %) samples)]
-            (if (empty? failures)
-              {:from source :to sink :status :pass}
-              {:from source :to sink :status :fail :failure :incompatible
-               :sample (first failures)}))
-          (catch Exception e
-            {:from source :to sink :status :fail :failure :generation-error
-             :detail (ex-message e)}))))))
+(defn- all-features [tree]
+  (mapcat (fn [sys] (mapcat layer-features (all-layers sys))) tree))
 
-(defn check-connections [system features]
-  (let [connections (or (:connections system) [])
-        results (vec (map #(check-one-connection system features %) connections))]
-    {:id (:id system) :check :connections
-     :status (if (every? #(= :pass (:status %)) results) :pass :fail)
-     :results results}))
+(defn- all-ids [tree]
+  (concat (map #(:id (props %)) tree)
+          (map #(:id (props %)) (mapcat system-subsystems tree))
+          (map #(:id (props %)) (all-features tree))))
+
+;; ---- Reference & visibility integrity (level 2) ----
+
+(defn check-references
+  "Return a vector of human-readable reference/integrity problems (empty if clean)."
+  [tree]
+  (let [sys-by-id (into {} (map (juxt #(:id (props %)) identity) tree))
+        problems  (atom [])
+        add! (fn [m] (swap! problems conj m))]
+    ;; connects-to integrity
+    (doseq [sys tree
+            [tsys tiface] (:connects-to (props sys))]
+      (let [target (sys-by-id tsys)]
+        (cond
+          (nil? target)
+          (add! (str (:id (props sys)) " connects-to unknown system " tsys))
+          (not (some #{tiface} (:provides (props target))))
+          (add! (str (:id (props sys)) " connects-to " tsys " " tiface
+                     ", but that system does not provide it")))))
+    ;; provides declaration <-> definition
+    (doseq [sys tree]
+      (let [declared (set (:provides (props sys)))
+            defined  (set (mapcat (fn [sub] (map :interface (vals (:provides (props sub)))))
+                                  (system-subsystems sys)))]
+        (doseq [iface declared :when (not (defined iface))]
+          (add! (str (:id (props sys)) " provides " iface
+                     ", but no subsystem defines routes for it")))
+        (doseq [iface defined :when (not (declared iface))]
+          (add! (str (:id (props sys)) " has a route for " iface
+                     ", but does not advertise it in :provides")))))
+    ;; uses integrity
+    (doseq [sys tree]
+      (let [sub-ids (set (map #(:id (props %)) (system-subsystems sys)))]
+        (doseq [sub (system-subsystems sys)
+                used (:uses (props sub)) :when (not (sub-ids used))]
+          (add! (str (:id (props sub)) " uses unknown subsystem " used)))))
+    ;; unique ids
+    (doseq [[id n] (frequencies (all-ids tree)) :when (> n 1)]
+      (add! (str "duplicate id " id)))
+    @problems))
+
+;; ---- Route schema well-formedness (level 3) ----
+
+(defn- empty-payload? [s] (or (nil? s) (and (vector? s) (empty? s))))
+
+(defn check-schemas
+  "Return problems for provider route :input/:output that are not valid,
+   generatable Malli schemas. [] and nil mean empty payload and are skipped."
+  [tree]
+  (let [problems (atom [])]
+    (doseq [sys tree
+            sub (system-subsystems sys)
+            [route entry] (:provides (props sub))
+            k [:input :output]
+            :let [s (get entry k)]
+            :when (not (empty-payload? s))]
+      (try
+        (mg/generate s)
+        (catch Exception e
+          (swap! problems conj
+                 (str (:id (props sub)) " route " (pr-str route) " " k
+                      " is not a valid schema: " (or (ex-message e) "(no message)"))))))
+    @problems))
 
 ;; ---- Core helpers ----
 
-(defn- load-spec [path]
-  (validate-spec! (edn/read-string (slurp path))))
+(defn load-tree
+  "Evaluate a spec file in the babashka runtime (not sandboxed); its last form (nilify/root …) returns the tree."
+  [path]
+  (load-string (slurp path)))
 
-(defn- load-system [path]
-  (validate-system! (edn/read-string (slurp path))))
-
-(defn- load-dir [dir loader]
-  (let [files (->> (file-seq (io/file dir))
-                   (filter #(and (.isFile %) (.endsWith (.getName %) ".clj"))))]
-    (vec (map #(loader (.getPath %)) files))))
-
-(defn- validate-all [features-dir systems-dir]
-  (let [features (if (.isDirectory (io/file features-dir))
-                   (load-dir features-dir load-spec) [])
-        systems  (if (.isDirectory (io/file systems-dir))
-                   (load-dir systems-dir load-system) [])
-        feature-map (into {} (map (juxt :id identity) features))
-        example-results (vec (map check-examples features))
-        connection-results (vec (for [sys systems]
-                                  (check-connections sys feature-map)))]
-    {:example-results example-results
-     :connection-results connection-results}))
+(defn validate-all
+  "Run all three validation passes on an already-loaded tree."
+  [tree]
+  (let [structure (check-structure tree)]
+    (if structure
+      {:structure structure :references [] :schemas []}
+      {:structure nil
+       :references (check-references tree)
+       :schemas    (check-schemas tree)})))
 
 ;; ---- GitHub helpers ----
 
@@ -171,12 +202,30 @@
     (io/file ".claude" "skills" "nilify")
     (io/file ".claude" "skills" (str "nilify-" skill-name))))
 
+(def root-template
+  "(ns my-project
+  (:require [nilify.core :as nilify]))
+
+(nilify/root
+ [[:system
+   {:id :sys/example
+    :tech \"your stack here\"
+    :desc (nilify/prompt \"What this system does.\")}
+   [:layer
+    [:feature
+     {:id :feat/example
+      :desc (nilify/prompt \"What this feature does.\")}]]]])
+")
+
 (defn cmd-init []
   (println "Initializing nilify project...")
-  (let [nil-dir (io/file "nil")]
-    (.mkdirs (io/file nil-dir "features"))
-    (.mkdirs (io/file nil-dir "systems"))
-    (println "  Created nil/features/ and nil/systems/"))
+  (let [nil-dir (io/file "nil")
+        root-file (io/file nil-dir "root.clj")]
+    (.mkdirs nil-dir)
+    (if (.exists root-file)
+      (println "  nil/root.clj already exists, leaving it untouched")
+      (do (spit root-file root-template)
+          (println "  Created nil/root.clj"))))
   (let [branch "main"]
     (doseq [skill-name skills]
       (let [url (str raw-url "/" branch "/skills/nilify/" skill-name "/SKILL.md")
@@ -190,35 +239,29 @@
           (println (str "  Warning: could not fetch skill " skill-name " from " url))))))
   (println "Done."))
 
-(defn cmd-validate []
-  (let [features-dir "nil/features"
-        systems-dir  "nil/systems"]
-    (if (not (.isDirectory (io/file features-dir)))
-      (do (println "No nil/features/ directory found. Run 'nilify init' first.")
+(defn cmd-validate [& [path]]
+  (let [spec-path (or path "nil/root.clj")]
+    (if-not (.exists (io/file spec-path))
+      (do (println (str "No spec file at " spec-path
+                        ". Run 'nilify init' first, or pass a path."))
           (System/exit 1))
-      (let [results (validate-all features-dir systems-dir)
-            ex-results (:example-results results)
-            cn-results (:connection-results results)
-            ex-pass (count (filter #(= :pass (:status %)) ex-results))
-            ex-total (count ex-results)
-            cn-pass (count (filter #(= :pass (:status %)) cn-results))
-            cn-total (count cn-results)
-            all-pass (and (= ex-pass ex-total) (= cn-pass cn-total))]
-        (println "Validation results:")
-        (if (zero? ex-total)
-          (println "  No feature specs found.")
-          (println (str "  Example conformance: " ex-pass "/" ex-total " pass")))
-        (when (pos? cn-total)
-          (println (str "  Connection compatibility: " cn-pass "/" cn-total " pass")))
-        (doseq [r ex-results :when (= :fail (:status r))]
-          (println (str "  FAIL " (:id r) ":"))
-          (doseq [f (:results r) :when (= :fail (:status f))]
-            (println (str "    " (:case f) " - " (:failure f)))))
-        (doseq [r cn-results :when (= :fail (:status r))]
-          (println (str "  FAIL connections in " (:id r) ":"))
-          (doseq [f (:results r) :when (= :fail (:status f))]
-            (println (str "    " (:from f) " -> " (:to f) " - " (:failure f)))))
-        (when-not all-pass (System/exit 1))))))
+      (let [tree (try
+                   (load-tree spec-path)
+                   (catch Exception e
+                     (println (str "Could not evaluate " spec-path ": " (ex-message e)))
+                     (System/exit 1)))
+            {:keys [structure references schemas]} (validate-all tree)]
+        (println (str "Validation results (" spec-path "):"))
+        (if structure
+          (do (println "  Structure: FAIL")
+              (println (str "    " (pr-str structure)))
+              (System/exit 1))
+          (do
+            (println "  Structure: ok")
+            (println (str "  References: " (count references) " problem(s)"))
+            (println (str "  Schemas: " (count schemas) " problem(s)"))
+            (doseq [p (concat references schemas)] (println (str "  - " p)))
+            (when (or (seq references) (seq schemas)) (System/exit 1))))))))
 
 (defn cmd-update []
   (println "Checking for updates...")
@@ -241,87 +284,66 @@
 (def spec-reference
 "; nilify spec reference -- every field documented in one place.
 ;
-; A project's specs live in nil/. There are two spec formats:
-;   1. Flat (EDN files in nil/features/ and nil/systems/) -- validated by `nilify validate`
-;   2. Tree  (Clojure script using nilify.core) -- composes specs as data
-
-;; ---------------------------------------------------------------------------
-;; 1. Flat feature spec -- nil/features/<id>.clj
-;; ---------------------------------------------------------------------------
-
-{:id      :feat/compute                  ; required: unique keyword
- :desc    \"Evaluate Clojure expressions\" ; optional: natural-language purpose
- :tech    \"babashka\"                    ; optional: free-form tech hint
- :deps    [:feat/translate]              ; optional: feature ids this depends on
- :cases                                  ; optional: typed cases
- {:eval
-  {:input   [:map [:expr :string]]       ; required: Malli schema for input
-   :output  [:map [:result :double]]     ; required: Malli schema for output
-   :desc    \"Parse and evaluate\"        ; optional: case-level description
-   :examples                             ; optional: input/output pairs
-   [{:in {:expr \"(+ 1 2)\"} :out {:result 3.0}}
-    {:in {:expr \"(* 2 4)\"} :out {:result 8.0}}]}}}
-
-;; ---------------------------------------------------------------------------
-;; 2. Flat system spec -- nil/systems/<id>.clj
-;; ---------------------------------------------------------------------------
-
-{:id          :sys/calculator            ; required: unique keyword
- :desc        \"NL calculator\"           ; optional: description
- :components                             ; required: map of name -> {:feature :lang}
- {:translate {:feature :feat/translate :lang :python}
-  :compute   {:feature :feat/compute   :lang :babashka}}
- :connections                            ; optional: data flow between components
- [[[:translate :translate :output]       ; from: [component case :input/:output]
-   [:compute   :eval      :input]]]}     ; to:   [component case :input/:output]
-
-;; ---------------------------------------------------------------------------
-;; 3. Tree form -- composes specs as Clojure data
-;; ---------------------------------------------------------------------------
+; A project's spec is ONE Clojure file (default nil/root.clj) that, when
+; evaluated, returns a tree via (nilify/root [...]). `nilify validate`
+; evaluates it as code with Babashka's bundled sci (not sandboxed) -- so
+; (nilify/prompt ...) and shared `def` schema vars work. The last form
+; must be the (nilify/root ...) call.
 
 (ns my-project
   (:require [nilify.core :as nilify]))
 
-(def spec-query  [:map [:query :string]])   ; shared schemas as Clojure vars
+;; Shared Malli schemas as ordinary vars, referenced anywhere in the tree:
 (def spec-result [:map [:result :double]])
 
-(def root (nilify/root
-           [[:system                              ; node type
-             {:id          :sys/backend           ; required
-              :tech        \"http-server babashka\" ; optional: free-form tech
-              :desc        \"REST API\"             ; optional
-              :provides                           ; optional: exposed interfaces
-              {[\"HTTP GET\" [\"/\"]]
-               {:interface :iface/api             ; group routes by interface name
-                :input     []
-                :output    [:vector spec-result]}}
-              :connects-to                        ; optional: consumed interfaces
-              #{[:sys/external :iface/auth]}}
+(nilify/root
+ [[:system                                  ; one or more systems
+   {:id          :sys/backend               ; required, :sys/<name>
+    :tech        \"http-server babashka\"     ; optional, free-form
+    :desc        (nilify/prompt \"...\" \"...\")    ; optional, prompt joins with spaces
+    :provides    [:iface/backend-api]        ; optional, interface NAMES advertised
+    :connects-to #{[:sys/other :iface/x]}}   ; optional, interfaces consumed
 
-             [:layer                              ; layers ordered bottom-to-top
-              [:feature                           ; foundational features go first
-               {:id        :feat/domain-model
-                :desc      \"Core domain types\"
-                :internals {:domain-model spec-result}}]]
+   ;; A system's children are EITHER layers (simple) OR subsystems (composed),
+   ;; never mixed. Layers/subsystems are ordered TOP-FIRST (by convention, not
+   ;; enforced): the first layer is the topmost/usable one; later layers are
+   ;; lower and more foundational; dependencies flow downward.
 
-             [:layer                              ; upper layer depends on lower
-              [:feature
-               {:id        :feat/api
-                :tech      \"compojure\"            ; per-feature tech override
-                :desc      (nilify/prompt
-                            \"Provides :iface/api\"
-                            \"Routes documented in :provides above.\")}]]]]))
+   [:subsystem
+    {:id       :sub/main                     ; required, :sub/<name>
+     :uses     [:sub/other]                  ; optional, sibling subsystems used
+     :provides                               ; optional, TYPED interface definitions
+     {[\"HTTP GET\" [\"/\"]]                     ; route key: free-form (method + path)
+      {:interface :iface/backend-api         ; must be advertised in system :provides
+       :input  []                            ; Malli schema, or [] / nil for empty
+       :output [:vector spec-result]}}}      ; Malli schema
+
+    [:layer                                  ; topmost layer (usable)
+     [:feature
+      {:id        :feat/api                  ; required, :feat/<name>
+       :tech      \"compojure\"                ; optional per-feature tech
+       :desc      (nilify/prompt \"...\")}]]
+    [:layer                                  ; lower layer (private)
+     [:feature
+      {:id        :feat/domain-model
+       :internals {:domain spec-result}}]]]]]) ; optional, free-form domain knowledge
 
 ;; ---------------------------------------------------------------------------
-;; Naming conventions (by convention, not enforced)
+;; Naming conventions (by convention)
 ;; ---------------------------------------------------------------------------
+;; :sys/<name>   system ids        :sub/<name>    subsystem ids
+;; :feat/<name>  feature ids       :iface/<name>  interface names
+;; :<feature>/<field>  schema fields owned by a feature
 
-;; :sys/<name>            system ids
-;; :feat/<name>           feature ids
-;; :iface/<name>          interface names (for :provides / :connects-to)
-;; :<feature>/<field>     schema fields owned by a feature (e.g. :domain-model/id)
+;; ---------------------------------------------------------------------------
+;; Validation (nilify validate) -- three schema-level passes, no project code run
+;; ---------------------------------------------------------------------------
+;; 1. Structure   -- the tree conforms to the node schemas above
+;; 2. References  -- connects-to resolves to a provided interface; every advertised
+;;                   interface is defined by a subsystem route (and vice versa);
+;;                   :uses resolves to a sibling subsystem; ids are unique
+;; 3. Schemas     -- each route :input/:output is a valid, generatable Malli schema
 ")
-
 (defn cmd-spec []
   (println spec-reference))
 
@@ -331,8 +353,8 @@
   (println "Usage: nilify <command>")
   (println)
   (println "Commands:")
-  (println "  init       Create nil/ folders and deploy skills into .claude/skills/")
-  (println "  validate   Validate specs in nil/features/ and nil/systems/")
+  (println "  init       Create nil/root.clj starter and deploy skills into .claude/skills/")
+  (println "  validate   Validate the spec tree (nil/root.clj, or a given path)")
   (println "  spec       Print the complete spec reference")
   (println "  update     Update nilify CLI to the latest version")
   (println "  version    Show version")
@@ -344,7 +366,7 @@
   (let [cmd (first args)]
     (case cmd
       "init"     (cmd-init)
-      "validate" (cmd-validate)
+      "validate" (apply cmd-validate (rest args))
       "spec"     (cmd-spec)
       "update"   (cmd-update)
       "version"  (cmd-version)
