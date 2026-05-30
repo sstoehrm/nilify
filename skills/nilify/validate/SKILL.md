@@ -14,53 +14,53 @@ Run schema-level validation on nilify specs. No code is executed.
 - User asks to "validate", "check", or "verify" the specs
 - CI/pre-commit check
 
-## Three levels of validation
+## Running validation
 
-### 1. Spec validity
-
-Each feature and system spec is well-formed per its Malli schema.
+One command runs all three levels:
 
 ```bash
-bb -e '(require (quote nil.core)) (nil.core/load-spec "nil/features/compute.clj")'
+nilify validate
 ```
 
-Catches: missing `:id`, missing `:cases`, malformed schemas, invalid `:provides` structure.
+Run it from the project root (the directory containing `nil/`). It loads `nil/root.clj`,
+reports per-level pass/fail counts, and exits non-zero if any check fails (suitable for
+CI / pre-commit). The spec is evaluated by babashka's bundled sci -- no sandboxing, no
+project code executed.
 
-### 2. Example conformance
+## What the three levels check
 
-Each example's `:in` value conforms to the case's `:input` schema. Each `:out` value conforms to the `:output` schema.
+### 1. Structure
 
-```bash
-bb -e '(require (quote nil.core)) (clojure.pprint/pprint (nil.core/validate {:features [(nil.core/load-spec "nil/features/compute.clj")]}))'
-```
+The whole tree conforms to the node schemas (system / subsystem / layer / feature shapes, required `:id`s, `:provides` / `:connects-to` shapes).
 
-Catches: examples that don't match their declared types.
+Catches: malformed nodes, missing `:id`, a system body mixing layers and subsystems, bad `:provides` structure.
 
-### 3. Connection compatibility
+### 2. References
 
-For each connection in a system spec, the source output schema is compatible with the sink input schema. Uses `malli.generator` to sample values from the output schema and validate against the input schema.
+Cross-reference and visibility integrity:
+- every `:connects-to [sys iface]` resolves to a system that advertises `iface` in its `:provides`;
+- every interface a system advertises is defined by a route in one of its subsystems (and no route advertises an interface the system doesn't list);
+- every `:uses` resolves to a sibling subsystem;
+- all ids are unique.
 
-```bash
-bb -e '(require (quote nil.core)) (clojure.pprint/pprint (nil.core/validate-all "nil/features" "nil/systems"))'
-```
+### 3. Schemas
 
-Catches: systems wired together with incompatible schemas.
+Each subsystem route's `:input`/`:output` is a valid, generatable Malli schema (`[]` or `nil` means an empty payload and is skipped).
 
 ## Reporting
 
 Present results concisely:
 
 ```
-Validation results:
-  ✓ spec validity: 5/5 specs valid
-  ✓ example conformance: 8/8 examples pass
-  ✗ connection compatibility: 1 failure
-    [:sys/frontend :feat/search-ui :output] → [:sys/backend :feat/api :input]
-    output schema [:map [:query :int]] incompatible with input [:map [:query :string]]
+Validation results (nil/root.clj):
+  Structure: ok
+  References: 1 problem(s)
+  Schemas: 0 problem(s)
+  - :sys/frontend connects-to :sys/backend :iface/search-api, but that system does not provide it
 ```
 
 ## When validation fails
 
-- **Spec validity failure** -- fix the spec structure. Invoke `nilify-author` if the user needs help.
-- **Example conformance failure** -- either the example or the schema is wrong. Ask the user which to fix.
-- **Connection incompatibility** -- the systems disagree on the interface contract. The provider's `:provides` schema is the source of truth. Fix the consumer's expectations or update the provider.
+- **Structure failure** -- fix the malformed node. Invoke `nilify-author` if the user needs help reshaping the tree.
+- **References failure** -- a `:connects-to` pair, `:uses` reference, or advertised interface name is unresolvable. Check ids and `:provides` lists for typos or missing entries.
+- **Schemas failure** -- a subsystem route's `:input` or `:output` is not a valid Malli schema. Fix the schema definition.

@@ -20,28 +20,32 @@ nilify defines systems as a hierarchical tree:
 ```
 root
   system (:tech, :provides, :connects-to)
-    layer (ordered bottom-to-top)
-      feature (:desc, :internals)
+    subsystem (:uses, :provides)        ; optional; groups layers
+      layer (ordered top-first)
+        feature (:desc, :internals)
 ```
 
 **root** -- one per project, contains systems.
 
-**system** -- a deployable unit. Has `:id`, `:tech` (free-form string like "react", "http-server babashka"), `:desc`. Exposes interfaces via `:provides`, consumes them via `:connects-to`.
+**system** -- a deployable unit. Has `:id`, `:tech` (free-form string like "react", "http-server babashka"), `:desc`. Advertises interfaces by name via `:provides`, consumes them via `:connects-to`. Its children are either layers (simple) or subsystems (composed).
 
-**layer** -- ordered bottom-to-top within a system. Dependencies flow downward only. Supports standard layered and onion architectures.
+**subsystem** -- optional grouping inside a system. Owns the typed interface definitions (its `:provides` route map) and declares cross-subsystem use via `:uses`.
+
+**layer** -- ordered top-first: the first layer is topmost/usable, lower layers are private. Dependencies flow downward only.
 
 **feature** -- leaf node. The unit of generation. Has `:id`, `:desc`, `:internals` (domain knowledge for the harness).
 
 ### Naming conventions
 
 - `:sys/` -- system ids
+- `:sub/` -- subsystem ids
 - `:feat/` -- feature ids
 - `:iface/` -- interface names
 - `:<feature>/` -- schema fields owned by a feature (e.g. `:domain-model/id`)
 
 ### Interfaces
 
-Systems expose interfaces via `:provides` (typed routes/operations grouped under an `:interface` name). Systems consume interfaces via `:connects-to` (a set of `[system interface]` pairs). The consumer doesn't know the interface shape -- only that it connects. The provider owns the contract.
+A system advertises which interfaces it exposes via `:provides` -- a list of `:iface/...` names. The typed route/operation definitions live on a `:subsystem`, whose `:provides` map groups routes under an `:interface` key. Systems consume interfaces via `:connects-to` (a set of `[system interface]` pairs). The consumer doesn't know the interface shape -- only that it connects. The provider owns the contract.
 
 ### Shared schemas
 
@@ -63,33 +67,36 @@ Route to these based on what the user is doing:
 ## Example spec
 
 ```clojure
-(def root (nilc/root
-           [[:system
-             {:id :sys/backend
-              :tech "http-server babashka"
-              :provides
-              {["HTTP GET" ["/"]]
-               {:interface :iface/api
-                :input []
-                :output [:vector spec-todo]}}}
-             [:layer
-              [:feature
-               {:id :feat/api
-                :desc "Provides :iface/api"}]
-              [:feature
-               {:id :feat/database
-                :tech "sqlite"
-                :desc "Store :feat/domain-model in sqlite"}]]
-             [:layer
-              [:feature
-               {:id :feat/domain-model
-                :internals {:domain-model spec-todo}}]]]]))
+(nilify/root
+ [[:system
+   {:id :sys/backend
+    :tech "http-server babashka"
+    :provides [:iface/api]}            ; advertised interface names
+   [:subsystem
+    {:id :sub/main
+     :provides                         ; typed interface definitions
+     {["HTTP GET" ["/"]]
+      {:interface :iface/api
+       :input []
+       :output [:vector spec-todo]}}}
+    [:layer                            ; topmost/usable layer
+     [:feature
+      {:id :feat/api
+       :desc (nilify/prompt "Provides :iface/api")}]
+     [:feature
+      {:id :feat/database
+       :tech "sqlite"
+       :desc (nilify/prompt "Store :feat/domain-model in sqlite")}]]
+    [:layer                            ; lower/private layer
+     [:feature
+      {:id :feat/domain-model
+       :internals {:domain-model spec-todo}}]]]]])
 ```
 
 ## Key principles
 
 - **Spec is primary.** Code is derived. Fix the spec before fixing the code.
 - **Language-agnostic.** `:tech` declares the stack; the harness generates in that language.
-- **Dependencies flow down.** Layers are ordered bottom-to-top. No upward calls.
+- **Dependencies flow down.** Layers are ordered top-first; lower layers are private. No upward calls.
 - **Consumer doesn't validate.** It declares what it connects to; the provider owns the contract.
 - **Collaborative evolution.** Both human and LLM propose spec changes. Human approves.

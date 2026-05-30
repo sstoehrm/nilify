@@ -17,7 +17,7 @@ Compare the current nilify spec tree against the last generated state. Determine
 
 ### 1. Read current spec tree
 
-Load all specs from the project (inline root or `nil/features/` + `nil/systems/`).
+Load the project spec tree by evaluating `nil/root.clj`.
 
 ### 2. Determine last-generated state
 

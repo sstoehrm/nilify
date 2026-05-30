@@ -16,10 +16,10 @@ Onboard a new contributor (human or agent) to a nilify project. Builds on the st
 ## Process
 
 1. **Invoke `superpowers:init`** (if available) to generate or read the standard CLAUDE.md onboarding
-2. **Read the nilify spec tree** -- find all `.clj` files under `nil/features/` and `nil/systems/` (or the root spec file if it uses inline `nilc/root`)
+2. **Read the nilify spec tree** -- evaluate the project's `nil/root.clj` (a `(nilify/root [...])` tree)
 3. **Summarize the architecture:**
    - List all systems with their `:tech` and `:desc`
-   - For each system, list layers (bottom-to-top) and features
+   - For each system, list layers (top-first) and features
    - List cross-system connections (`:provides` / `:connects-to`)
    - List shared schemas
 4. **Present to the user** as a concise architecture overview
